@@ -1,0 +1,16 @@
+export const T = {
+  green: "#1a6b4a",
+  greenMid: "#2d9968",
+  greenLight: "#d4f0e3",
+  amber: "#ca8a04",
+  amberLight: "#fef3c7",
+  red: "#b91c1c",
+  redLight: "#fee2e2",
+  blue: "#006093",
+  surface: "#f5f7f5",
+  card: "#ffffff",
+  text: "#1a1f1a",
+  muted: "#6b7280",
+  border: "#e5e7e5",
+  radius: 16,
+};

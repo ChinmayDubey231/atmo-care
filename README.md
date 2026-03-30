@@ -10,15 +10,15 @@ It combines real-time AQI insights, smart recommendations, and gamification to c
 ## 📸 Screenshots
 
 <p align="center">
+  <img src="assets/auth.jpeg" width="250" />
   <img src="assets/home.jpeg" width="250" />
-  <img src="assets/activities.jpeg" width="250" />
-  <img src="assets/activities_logs.jpeg" width="250" />
+  <img src="assets/settings.jpeg" width="250" />
 </p>
 
 <p align="center">
+  <img src="assets/activities.jpeg" width="250" />
+  <img src="assets/activities_logs.jpeg" width="250" />
   <img src="assets/plant_wiki.jpeg" width="250" />
-  <img src="assets/settings.jpeg" width="250" />
-  <img src="assets/auth.jpeg" width="250" />
 </p>
 
 ## ✨ Features

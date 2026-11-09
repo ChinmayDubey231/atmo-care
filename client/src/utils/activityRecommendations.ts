@@ -1,9 +1,5 @@
 import { T } from "@/constants/theme";
-import {
-  AqiMeta,
-  DailyRecommendations,
-  HistoryItem,
-} from "@/types/activities_type";
+import { AqiMeta, DailyRecommendations } from "@/types/activities_type";
 
 export function getRecommendedActivities(
   aqi: number | null,
@@ -27,6 +23,7 @@ export function getRecommendedActivities(
     if (timeOfDay === "Morning") {
       return {
         primary: {
+          key: "indoor-yoga",
           title: "Indoor Yoga Flow",
           subtitle: "Start the day fresh while keeping windows tightly closed.",
           badge: "INDOOR SAFE",
@@ -40,6 +37,7 @@ export function getRecommendedActivities(
           ],
         },
         secondary1: {
+          key: "read-book",
           title: "Read a Book",
           alert: "STAY INSIDE",
           icon: "book-open-page-variant",
@@ -51,6 +49,7 @@ export function getRecommendedActivities(
           ],
         },
         secondary2: {
+          key: "organize-space",
           title: "Organize Space",
           alert: "PRODUCTIVE",
           icon: "archive-outline",
@@ -65,6 +64,7 @@ export function getRecommendedActivities(
     } else if (timeOfDay === "Afternoon") {
       return {
         primary: {
+          key: "home-hiit",
           title: "Home HIIT Workout",
           subtitle: "Get your heart rate up safely without the outdoor smog.",
           badge: "HIGH ENERGY",
@@ -78,6 +78,7 @@ export function getRecommendedActivities(
           ],
         },
         secondary1: {
+          key: "plant-care",
           title: "Plant Care",
           alert: "AIR PURIFIERS",
           icon: "leaf",
@@ -89,6 +90,7 @@ export function getRecommendedActivities(
           ],
         },
         secondary2: {
+          key: "meal-prep",
           title: "Meal Prep",
           alert: "HEALTHY",
           icon: "pot-steam-outline",
@@ -104,6 +106,7 @@ export function getRecommendedActivities(
       // Evening / Night (Poor AQI)
       return {
         primary: {
+          key: "movie-marathon",
           title: "Movie Marathon",
           subtitle:
             "Perfect excuse to stay in, cozy up, and avoid the night smog.",
@@ -117,6 +120,7 @@ export function getRecommendedActivities(
           ],
         },
         secondary1: {
+          key: "meditation",
           title: "Meditation",
           alert: "WIND DOWN",
           icon: "meditation",
@@ -128,6 +132,7 @@ export function getRecommendedActivities(
           ],
         },
         secondary2: {
+          key: "light-cleaning",
           title: "Light Cleaning",
           alert: "DUST CONTROL",
           icon: "broom",
@@ -146,6 +151,7 @@ export function getRecommendedActivities(
   if (timeOfDay === "Morning") {
     return {
       primary: {
+        key: "morning-jog",
         title: "Morning Jog",
         subtitle:
           "Crisp air! Take advantage of the perfect conditions for a run.",
@@ -160,6 +166,7 @@ export function getRecommendedActivities(
         ],
       },
       secondary1: {
+        key: "cycling",
         title: "Cycling",
         alert: "LOW TRAFFIC",
         icon: "bike",
@@ -172,6 +179,7 @@ export function getRecommendedActivities(
         ],
       },
       secondary2: {
+        key: "outdoor-stretch",
         title: "Outdoor Stretch",
         alert: "MODERATE UV",
         icon: "yoga",
@@ -187,6 +195,7 @@ export function getRecommendedActivities(
   } else if (timeOfDay === "Afternoon") {
     return {
       primary: {
+        key: "park-walk",
         title: "Park Walk",
         subtitle: "Get some sun and fresh air while the breeze is blowing.",
         badge: "GREAT WEATHER",
@@ -200,6 +209,7 @@ export function getRecommendedActivities(
         ],
       },
       secondary1: {
+        key: "hydrate",
         title: "Hydrate",
         alert: "PEAK SUN",
         icon: "water-outline",
@@ -211,6 +221,7 @@ export function getRecommendedActivities(
         ],
       },
       secondary2: {
+        key: "shaded-reading",
         title: "Shaded Reading",
         alert: "RELAXING",
         icon: "tree-outline",
@@ -226,6 +237,7 @@ export function getRecommendedActivities(
     // Evening / Night (Good AQI)
     return {
       primary: {
+        key: "sunset-stroll",
         title: "Sunset Stroll",
         subtitle: "Wind down your day with excellent evening air quality.",
         badge: "RELAXING",
@@ -238,6 +250,7 @@ export function getRecommendedActivities(
         ],
       },
       secondary1: {
+        key: "star-gazing",
         title: "Star Gazing",
         alert: "CLEAR SKIES",
         icon: "weather-night",
@@ -249,6 +262,7 @@ export function getRecommendedActivities(
         ],
       },
       secondary2: {
+        key: "patio-dinner",
         title: "Patio Dinner",
         alert: "FRESH AIR",
         icon: "silverware-fork-knife",
@@ -263,64 +277,26 @@ export function getRecommendedActivities(
   }
 }
 
-export const MOCK_HISTORY: HistoryItem[] = [
-  {
-    id: "1",
-    title: "Morning Jog",
-    emoji: "🏃",
-    points: 80,
-    date: "Today, 7:14 AM",
-    aqi: "Good",
-    aqiColor: T.green,
-  },
-  {
-    id: "2",
-    title: "Outdoor Stretch",
-    emoji: "🤸",
-    points: 40,
-    date: "Today, 8:02 AM",
-    aqi: "Good",
-    aqiColor: T.green,
-  },
-  {
-    id: "3",
-    title: "Park Walk",
-    emoji: "🌳",
-    points: 50,
-    date: "Yesterday, 3:45 PM",
-    aqi: "Good",
-    aqiColor: T.green,
-  },
-  {
-    id: "4",
-    title: "Indoor Yoga Flow",
-    emoji: "🧘",
-    points: 50,
-    date: "Yesterday, 7:30 AM",
-    aqi: "Moderate",
-    aqiColor: T.amber,
-  },
-  {
-    id: "5",
-    title: "Meditation",
-    emoji: "🌙",
-    points: 40,
-    date: "2 days ago, 9:00 PM",
-    aqi: "Unhealthy",
-    aqiColor: T.red,
-  },
-  {
-    id: "6",
-    title: "Home HIIT",
-    emoji: "💪",
-    points: 60,
-    date: "3 days ago, 5:30 PM",
-    aqi: "Moderate",
-    aqiColor: T.amber,
-  },
-];
+/** "Today, 7:14 AM" · "Yesterday, 3:45 PM" · "3 days ago, 5:30 PM" */
+export function formatLogDate(iso: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  const startOfDay = (x: Date) =>
+    new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const days = Math.round((startOfDay(now) - startOfDay(d)) / 86_400_000);
+  if (days <= 0) return `Today, ${time}`;
+  if (days === 1) return `Yesterday, ${time}`;
+  if (days < 7) return `${days} days ago, ${time}`;
+  return `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`;
+}
 
-export const TOTAL_POINTS = MOCK_HISTORY.reduce((s, a) => s + a.points, 0);
+/** Label and colour for the AQI tag on an activity-log row */
+export function aqiTag(level: number | null): { label: string; color: string } | null {
+  if (level == null) return null;
+  if (level <= 2) return { label: "Good", color: T.green };
+  if (level === 3) return { label: "Moderate", color: T.amber };
+  return { label: level === 4 ? "Unhealthy" : "Hazardous", color: T.red };
+}
 
 const ICON_MAP: Record<string, string> = {
   "book-open-page-variant": "📖",

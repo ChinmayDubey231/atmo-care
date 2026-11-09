@@ -1,12 +1,10 @@
 import {
   useState,
-  useEffect,
   useLayoutEffect,
   useCallback,
   useRef,
 } from "react";
 import {
-  Platform,
   Text,
   View,
   ScrollView,
@@ -17,12 +15,12 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
-import * as Device from "expo-device";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useNavigation } from "expo-router";
-import { getFullLocationStats, LocationData } from "@/api/locationUtils";
+import { useLogActivity, useStats } from "@/api/queries";
+import type { LogResult } from "@/api/types";
+import { useAirQuality } from "@/hooks/useAirQuality";
 import { AQIHeroCard } from "../components/AQIHeroCard";
 import { DailyActivitiesBento } from "../components/DailyActivitiesBento";
 import {
@@ -41,21 +39,17 @@ const COLORS = {
   onSurface: "#2b302f",
 };
 
-type LogEntry = { timestamp: Date; type: InteractionType };
-
 const SCREEN_HEIGHT = Dimensions.get("window").height;
 
 export default function App() {
   const navigation = useNavigation();
-  const [location, setLocation] = useState<Location.LocationObject | null>(
-    null,
-  );
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [stats, setStats] = useState<LocationData | null>(null);
+  const { stats, errorMsg } = useAirQuality();
+  const { data: myStats } = useStats();
+  const logCare = useLogActivity();
   const [activeInteraction, setActiveInteraction] =
     useState<InteractionType | null>(null);
-  const [log, setLog] = useState<LogEntry[]>([]);
-  const [justLogged, setJustLogged] = useState(false);
+  const [lastResult, setLastResult] = useState<LogResult | null>(null);
+  const justLogged = lastResult != null;
   const [modalVisible, setModalVisible] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -98,46 +92,11 @@ export default function App() {
     });
   }, [navigation, HeaderLeft, HeaderRight]);
 
-  // ── Location ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    async function getCurrentLocation() {
-      if (Platform.OS === "android" && !Device.isDevice) {
-        setErrorMsg(
-          "This won't work on an Android Emulator. Try a real device!",
-        );
-        return;
-      }
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setErrorMsg("Permission to access location was denied");
-        return;
-      }
-      const loc = await Location.getCurrentPositionAsync({});
-      setLocation(loc);
-    }
-    getCurrentLocation();
-  }, []);
-
-  useEffect(() => {
-    if (!location?.coords) return;
-    const fetchStats = async () => {
-      try {
-        const data = await getFullLocationStats(
-          location.coords.latitude,
-          location.coords.longitude,
-        );
-        if (data) setStats(data);
-      } catch (error) {
-        console.error("Failed to fetch location stats:", error);
-      }
-    };
-    fetchStats();
-  }, [location]);
-
   // ── Sheet animations ─────────────────────────────────────────────────────────
   function openSheet(type: InteractionType) {
     setActiveInteraction(type);
-    setJustLogged(false);
+    setLastResult(null);
+    logCare.reset();
     setModalVisible(true);
     Animated.parallel([
       Animated.spring(slideAnim, {
@@ -169,24 +128,23 @@ export default function App() {
     ]).start(() => {
       setModalVisible(false);
       setActiveInteraction(null);
-      setJustLogged(false);
+      setLastResult(null);
     });
   }
 
   // ── Log helpers ──────────────────────────────────────────────────────────────
   function handleLogAction() {
     if (!activeInteraction) return;
-    setLog((prev) => [
-      { timestamp: new Date(), type: activeInteraction },
-      ...prev,
-    ]);
-    setJustLogged(true);
+    logCare.mutate(
+      { kind: "care", key: activeInteraction, aqiLevel: stats?.aqi ?? null },
+      { onSuccess: setLastResult },
+    );
   }
 
   function getLastLogged(type: InteractionType): string {
-    const entry = log.find((l) => l.type === type);
-    if (!entry) return "Never logged";
-    const diffMs = Date.now() - entry.timestamp.getTime();
+    const lastAt = myStats?.care[type].lastAt;
+    if (!lastAt) return "Never logged";
+    const diffMs = Date.now() - new Date(lastAt).getTime();
     const diffMins = Math.floor(diffMs / 60000);
     if (diffMins < 1) return "Just now";
     if (diffMins < 60) return `${diffMins}m ago`;
@@ -195,8 +153,9 @@ export default function App() {
     return `${Math.floor(diffHrs / 24)}d ago`;
   }
 
+  /** Times logged today */
   function getStreak(type: InteractionType): number {
-    return log.filter((l) => l.type === type).length;
+    return myStats?.care[type].todayCount ?? 0;
   }
 
   const activeConfig = activeInteraction
@@ -332,22 +291,33 @@ export default function App() {
                   <Text
                     style={[styles.loggedText, { color: activeConfig.color }]}
                   >
-                    Logged successfully!
+                    {lastResult?.alreadyEarnedToday
+                      ? "Logged! (Today's points already earned)"
+                      : `Logged successfully! +${lastResult?.pointsAwarded} pts`}
                   </Text>
                 </View>
               ) : (
-                <TouchableOpacity
-                  style={[
-                    styles.actionBtn,
-                    { backgroundColor: activeConfig.color },
-                  ]}
-                  onPress={handleLogAction}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.actionBtnText}>
-                    {activeConfig.actionLabel}
-                  </Text>
-                </TouchableOpacity>
+                <>
+                  {logCare.error ? (
+                    <Text style={styles.errorText}>
+                      {logCare.error.message}
+                    </Text>
+                  ) : null}
+                  <TouchableOpacity
+                    style={[
+                      styles.actionBtn,
+                      { backgroundColor: activeConfig.color },
+                      logCare.isPending && { opacity: 0.6 },
+                    ]}
+                    onPress={handleLogAction}
+                    disabled={logCare.isPending}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.actionBtnText}>
+                      {logCare.isPending ? "Logging…" : activeConfig.actionLabel}
+                    </Text>
+                  </TouchableOpacity>
+                </>
               )}
             </View>
           )}
@@ -426,7 +396,7 @@ const styles = StyleSheet.create({
 
   // Backdrop
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.4)",
   },
 
@@ -510,6 +480,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#ffffff",
     letterSpacing: 0.3,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: 10,
   },
   loggedBadge: {
     flexDirection: "row",

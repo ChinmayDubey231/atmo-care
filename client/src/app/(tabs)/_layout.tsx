@@ -1,10 +1,17 @@
 import { useAuth } from "@clerk/expo";
 import { Redirect, Tabs } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
-import { View } from "react-native";
+import { ColorValue, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAccountSync } from "@/hooks/useAccountSync";
 
 const BRAND_COLOR = "#006944";
+
+/** Rendered only once signed in, so its API calls are authenticated. */
+const AccountSync = () => {
+  useAccountSync();
+  return null;
+};
 
 const TabIcon = ({
   name,
@@ -13,7 +20,7 @@ const TabIcon = ({
   focused,
 }: {
   name: React.ComponentProps<typeof MaterialIcons>["name"];
-  color: string;
+  color: ColorValue;
   size: number;
   focused: boolean;
 }) => (
@@ -39,6 +46,8 @@ const TabsLayout = () => {
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
 
   return (
+    <>
+    <AccountSync />
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: BRAND_COLOR,
@@ -104,6 +113,7 @@ const TabsLayout = () => {
         }}
       />
     </Tabs>
+    </>
   );
 };
 

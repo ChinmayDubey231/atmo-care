@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MaterialCommunityIcons, Ionicons } from "@expo/vector-icons";
 import { getRecommendedActivities } from "@/utils/activityRecommendations";
 import { ActivityDetails } from "@/types/activities_type";
+import { useLogActivity } from "@/api/queries";
 
 const COLORS = {
   primary: "#006944",
@@ -31,6 +32,25 @@ export function DailyActivitiesBento({ aqi }: Props) {
   // State to track which activity was tapped
   const [selectedActivity, setSelectedActivity] =
     useState<ActivityDetails | null>(null);
+  const logActivity = useLogActivity();
+  const { reset } = logActivity;
+
+  // Fresh button state for each activity opened
+  useEffect(() => {
+    reset();
+  }, [selectedActivity, reset]);
+
+  const handlePrimary = () => {
+    if (logActivity.data || !selectedActivity) {
+      setSelectedActivity(null);
+      return;
+    }
+    logActivity.mutate({
+      kind: "activity",
+      key: selectedActivity.key,
+      aqiLevel: aqi,
+    });
+  };
 
   return (
     <View style={styles.sectionContainer}>
@@ -250,7 +270,7 @@ export function DailyActivitiesBento({ aqi }: Props) {
                 color={COLORS.primary}
               />
               <Text style={styles.prepText}>
-                Log this activity to earn 50 Eco Points
+                Log this activity to earn {selectedActivity?.points} Eco Points
               </Text>
             </View>
             <View style={styles.prepRow}>
@@ -265,17 +285,32 @@ export function DailyActivitiesBento({ aqi }: Props) {
             </View>
 
             {/* Action Buttons */}
+            {logActivity.data ? (
+              <Text style={styles.resultText}>
+                {logActivity.data.alreadyEarnedToday
+                  ? "Logged again — today's points for this one are already earned."
+                  : `Nice work! +${logActivity.data.pointsAwarded} Eco Points`}
+              </Text>
+            ) : null}
+            {logActivity.error ? (
+              <Text style={styles.errorText}>{logActivity.error.message}</Text>
+            ) : null}
             <TouchableOpacity
               style={[
                 styles.primaryButton,
                 { backgroundColor: selectedActivity?.color || COLORS.primary },
+                logActivity.isPending && { opacity: 0.6 },
               ]}
-              onPress={() => {
-                alert(`Started ${selectedActivity?.title}!`);
-                setSelectedActivity(null);
-              }}
+              onPress={handlePrimary}
+              disabled={logActivity.isPending}
             >
-              <Text style={styles.primaryButtonText}>Start Activity</Text>
+              <Text style={styles.primaryButtonText}>
+                {logActivity.data
+                  ? "Done"
+                  : logActivity.isPending
+                    ? "Logging…"
+                    : "Log Activity"}
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -363,7 +398,7 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,0,0,0.4)",
   },
   bottomSheet: {
@@ -450,6 +485,19 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "800",
+  },
+  resultText: {
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.primary,
+    textAlign: "center",
+  },
+  errorText: {
+    marginTop: 12,
+    fontSize: 13,
+    color: "#b31b25",
+    textAlign: "center",
   },
   secondaryButton: {
     paddingVertical: 16,

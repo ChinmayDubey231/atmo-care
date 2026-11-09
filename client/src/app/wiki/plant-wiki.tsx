@@ -16,6 +16,7 @@ import { useUser } from "@clerk/expo";
 import { CATEGORIES, Plant, PLANTS } from "../../utils/plant-wikiConfig";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PlantDetailModal from "../components/PlantDetailModal";
+import { useFavorites, useToggleFavorite } from "@/api/queries";
 
 const PlantWikiScreen = () => {
   const router = useRouter();
@@ -24,15 +25,12 @@ const PlantWikiScreen = () => {
 
   const [activeCategory, setActiveCategory] = useState("all");
   const [search, setSearch] = useState("");
-  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const { data: favorites = new Set<string>() } = useFavorites();
+  const { mutate: setFavorite } = useToggleFavorite();
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
 
   const toggleFav = (key: string) =>
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
-      return next;
-    });
+    setFavorite({ plantKey: key, favorite: !favorites.has(key) });
 
   const filtered = PLANTS.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -329,12 +327,12 @@ const styles = StyleSheet.create({
     height: 340,
   },
   featuredImage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     width: "100%",
     height: "100%",
   },
   featuredOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,30,15,0.62)",
   },
   featuredContent: {

@@ -13,11 +13,12 @@ import {
   Image,
   StyleSheet,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import PrepSheet from "../components/PrepSheet";
-import { ActivityDetails, AqiMeta, HistoryItem } from "@/types/activities_type";
+import { ActivityDetails, AqiMeta } from "@/types/activities_type";
 import {
   Badge,
   PointsPill,
@@ -25,23 +26,34 @@ import {
 } from "../components/activities-subcomponents";
 import {
   AQI_META,
+  aqiTag,
   emojiFor,
+  formatLogDate,
   getRecommendedActivities,
-  MOCK_HISTORY,
 } from "@/utils/activityRecommendations";
 import StatsBar from "../components/Statbar";
+import { Leaderboard } from "../components/Leaderboard";
 import { T } from "@/constants/theme";
 import { useNavigation } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useLogs, useStats } from "@/api/queries";
+import type { LogItem } from "@/api/types";
+import { useAirQuality } from "@/hooks/useAirQuality";
 
 function AqiHero({
   meta,
   aqiLevel,
+  isPreview,
+  hasLive,
   onLevelChange,
+  onBackToLive,
 }: {
   meta: AqiMeta;
   aqiLevel: number;
+  isPreview: boolean;
+  hasLive: boolean;
   onLevelChange: (level: number) => void;
+  onBackToLive: () => void;
 }) {
   return (
     <LinearGradient
@@ -69,7 +81,15 @@ function AqiHero({
           </TouchableOpacity>
         ))}
       </View>
-      <Text style={styles.aqiHint}>Tap to preview AQI level</Text>
+      {isPreview && hasLive ? (
+        <TouchableOpacity onPress={onBackToLive}>
+          <Text style={styles.aqiHint}>Previewing · Tap here for live AQI</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.aqiHint}>
+          {hasLive ? "Live for your location · " : ""}Tap to preview AQI level
+        </Text>
+      )}
     </LinearGradient>
   );
 }
@@ -166,7 +186,8 @@ function SecondaryCard({
   );
 }
 
-function HistoryRow({ item, index }: { item: HistoryItem; index: number }) {
+function HistoryRow({ item, index }: { item: LogItem; index: number }) {
+  const tag = aqiTag(item.aqiLevel);
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -185,16 +206,16 @@ function HistoryRow({ item, index }: { item: HistoryItem; index: number }) {
       </View>
       <View style={styles.historyInfo}>
         <Text style={styles.historyTitle}>{item.title}</Text>
-        <Text style={styles.historyDate}>{item.date}</Text>
+        <Text style={styles.historyDate}>{formatLogDate(item.loggedAt)}</Text>
       </View>
       <View style={styles.historyRight}>
-        <View
-          style={[styles.aqiTag, { backgroundColor: item.aqiColor + "18" }]}
-        >
-          <Text style={[styles.aqiTagText, { color: item.aqiColor }]}>
-            {item.aqi}
-          </Text>
-        </View>
+        {tag ? (
+          <View style={[styles.aqiTag, { backgroundColor: tag.color + "18" }]}>
+            <Text style={[styles.aqiTagText, { color: tag.color }]}>
+              {tag.label}
+            </Text>
+          </View>
+        ) : null}
         <Text style={styles.historyPoints}>+{item.points}</Text>
       </View>
     </Animated.View>
@@ -208,11 +229,17 @@ export default function ActivitiesScreen() {
   const currentHour = now.getHours();
   const navigation = useNavigation();
 
-  const [aqiLevel, setAqiLevel] = useState(1);
+  const { stats: air } = useAirQuality();
+  const liveLevel = air?.aqi ?? null;
+  const [previewLevel, setPreviewLevel] = useState<number | null>(null);
+  const aqiLevel = previewLevel ?? liveLevel ?? 1;
+  const { data: logs, isLoading: logsLoading, error: logsError } = useLogs();
+  const { data: stats } = useStats();
   const [sheetItem, setSheetItem] = useState<ActivityDetails | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const meta = AQI_META[aqiLevel - 1];
+  const history = logs?.items ?? [];
   const recs = getRecommendedActivities(aqiLevel, currentHour);
 
   const openSheet = useCallback((item: any) => {
@@ -273,7 +300,14 @@ export default function ActivitiesScreen() {
         contentContainerStyle={styles.scroll}
       >
         {/* ── AQI HERO ── */}
-        <AqiHero meta={meta} aqiLevel={aqiLevel} onLevelChange={setAqiLevel} />
+        <AqiHero
+          meta={meta}
+          aqiLevel={aqiLevel}
+          isPreview={previewLevel != null && previewLevel !== liveLevel}
+          hasLive={liveLevel != null}
+          onLevelChange={setPreviewLevel}
+          onBackToLive={() => setPreviewLevel(null)}
+        />
 
         {/* ── STATS ── */}
         <StatsBar />
@@ -304,27 +338,50 @@ export default function ActivitiesScreen() {
           />
         </View>
 
+        {/* ── LEADERBOARD ── */}
+        <Leaderboard />
+
         {/* ── LOGGED HISTORY ── */}
-        <SectionHeader
-          title="Activity Log"
-          sub={`${MOCK_HISTORY.length} activities recorded`}
-        />
+        <View style={{ marginTop: 20 }}>
+          <SectionHeader
+            title="Activity Log"
+            sub={
+              stats ? `${stats.totalLogs} activities recorded` : undefined
+            }
+          />
+        </View>
         <View style={styles.historyCard}>
-          {MOCK_HISTORY.map((item, i) => (
-            <React.Fragment key={item.id}>
-              <HistoryRow item={item} index={i} />
-              {i < MOCK_HISTORY.length - 1 && (
-                <View style={styles.historyDivider} />
-              )}
-            </React.Fragment>
-          ))}
+          {logsLoading ? (
+            <ActivityIndicator style={{ padding: 24 }} color={T.green} />
+          ) : logsError ? (
+            <Text style={styles.historyEmpty}>{logsError.message}</Text>
+          ) : history.length === 0 ? (
+            <Text style={styles.historyEmpty}>
+              Nothing logged yet. Pick an activity above to earn your first
+              Eco Points!
+            </Text>
+          ) : (
+            history.map((item, i) => (
+              <React.Fragment key={item.id}>
+                <HistoryRow item={item} index={i} />
+                {i < history.length - 1 && (
+                  <View style={styles.historyDivider} />
+                )}
+              </React.Fragment>
+            ))
+          )}
         </View>
 
         <View style={{ height: 40 }} />
       </ScrollView>
 
       {/* ── PREP TIPS SHEET ── */}
-      <PrepSheet visible={sheetVisible} item={sheetItem} onClose={closeSheet} />
+      <PrepSheet
+        visible={sheetVisible}
+        item={sheetItem}
+        aqiLevel={liveLevel}
+        onClose={closeSheet}
+      />
     </View>
   );
 }
@@ -595,6 +652,13 @@ const styles = StyleSheet.create({
     height: StyleSheet.hairlineWidth,
     backgroundColor: T.border,
     marginLeft: 72,
+  },
+  historyEmpty: {
+    padding: 20,
+    textAlign: "center",
+    color: T.muted,
+    fontSize: 13,
+    lineHeight: 19,
   },
 
   headerLeft: {

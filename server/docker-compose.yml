@@ -1,0 +1,17 @@
+name: atmo-care
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: atmo
+      POSTGRES_PASSWORD: atmo
+      POSTGRES_DB: atmocare
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+
+volumes:
+  pgdata:

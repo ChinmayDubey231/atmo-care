@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Pressable,
+  Alert,
+  Linking,
 } from "react-native";
 import React, { useLayoutEffect, useState } from "react";
 import { useAuth, useUser } from "@clerk/expo";
@@ -13,14 +15,33 @@ import { useNavigation, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
+import { useBottomTabBarHeight } from "expo-router/js-tabs";
 import MeasurementModal from "../components/MeasurementModal";
 import { getMeasurementLabel } from "../../utils/measurementUnitsConfig";
 import { getUserName } from "../../utils/userUtils";
+import { useApi, useMe, useStats, useUpdateMe } from "@/api/queries";
+import type { Settings, Units } from "@/api/types";
+import {
+  getExpoPushToken,
+  getNotificationPermission,
+  unregisterPushToken,
+} from "@/hooks/usePushNotifications";
 
-const NOTIFICATIONS = [
+type ToggleItem = {
+  key: string;
+  setting: Exclude<keyof Settings, "units">;
+  label: string;
+  sub: string;
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  iconColor: string;
+  iconBg: string;
+  defaultOn: boolean;
+};
+
+const NOTIFICATIONS: ToggleItem[] = [
   {
     key: "aqi",
+    setting: "aqiAlerts",
     label: "AQI Alerts",
     sub: "Instant alerts for poor air quality",
     icon: "weather-windy" as const,
@@ -30,6 +51,7 @@ const NOTIFICATIONS = [
   },
   {
     key: "plant",
+    setting: "plantReminders",
     label: "Plant Reminders",
     sub: "Watering and care schedules",
     icon: "sprout" as const,
@@ -39,6 +61,7 @@ const NOTIFICATIONS = [
   },
   {
     key: "community",
+    setting: "communityMessages",
     label: "Community Messages",
     sub: "Updates from local plant enthusiasts",
     icon: "message-text" as const,
@@ -48,22 +71,104 @@ const NOTIFICATIONS = [
   },
 ];
 
+const PRIVACY: ToggleItem[] = [
+  {
+    key: "leaderboard",
+    setting: "showOnLeaderboard",
+    label: "Show Me on Leaderboard",
+    sub: "Only your first name and last initial",
+    icon: "trophy-outline",
+    iconColor: "#ca8a04",
+    iconBg: "#fef3c7",
+    defaultOn: true,
+  },
+];
+
+const PUSH_SETTINGS: ToggleItem["setting"][] = ["aqiAlerts", "plantReminders"];
+
 const Setting = () => {
   const { signOut } = useAuth();
   const { user } = useUser();
   const navigation = useNavigation();
   const router = useRouter();
+  const api = useApi();
+  const { data: me } = useMe();
+  const { data: stats } = useStats();
+  const updateMe = useUpdateMe();
 
   const tabBarHeight = useBottomTabBarHeight();
-  const [toggles, setToggles] = useState<Record<string, boolean>>(
-    Object.fromEntries(NOTIFICATIONS.map((n) => [n.key, n.defaultOn])),
-  );
 
   const [unitsModalVisible, setUnitsModalVisible] = useState(false);
-  const [selectedUnit, setSelectedUnit] = useState("metric");
+  const selectedUnit = me?.settings.units ?? "metric";
 
-  const toggle = (key: string) =>
-    setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
+  const isOn = (item: ToggleItem) =>
+    me?.settings[item.setting] ?? item.defaultOn;
+
+  const saveSettings = (changes: Partial<Settings>) =>
+    updateMe.mutate(changes, {
+      onError: (e) => Alert.alert("Couldn't save your settings", e.message),
+    });
+
+  const toggle = async (item: ToggleItem) => {
+    const next = !isOn(item);
+    saveSettings({ [item.setting]: next });
+
+    // Turning on an alert: make sure we can actually deliver it
+    if (next && PUSH_SETTINGS.includes(item.setting)) {
+      const permission = await getNotificationPermission();
+      if (!permission) return; // e.g. Expo Go on Android: no push available
+      if (permission.status !== "granted" && !permission.canAskAgain) {
+        Alert.alert(
+          "Notifications are off",
+          "Allow notifications for this app in your device settings to receive alerts.",
+          [
+            { text: "Not now", style: "cancel" },
+            { text: "Open Settings", onPress: () => Linking.openSettings() },
+          ],
+        );
+        return;
+      }
+      const token = await getExpoPushToken({ ask: true });
+      if (token) {
+        api("/me/push-token", { method: "PUT", body: { token } }).catch(
+          () => {},
+        );
+      }
+    }
+  };
+
+  const handleLogout = async () => {
+    await unregisterPushToken(api);
+    await signOut();
+  };
+
+  const renderToggles = (items: ToggleItem[]) =>
+    items.map((item, idx) => (
+      <View
+        key={item.key}
+        style={[styles.row, idx < items.length - 1 && styles.rowDivider]}
+      >
+        <View style={[styles.iconCircle, { backgroundColor: item.iconBg }]}>
+          <MaterialCommunityIcons
+            name={item.icon}
+            size={22}
+            color={item.iconColor}
+          />
+        </View>
+        <View style={styles.rowText}>
+          <Text style={styles.rowLabel}>{item.label}</Text>
+          <Text style={styles.rowSub}>{item.sub}</Text>
+        </View>
+        <Switch
+          value={isOn(item)}
+          onValueChange={() => toggle(item)}
+          disabled={!me}
+          trackColor={{ false: "#d7dedc", true: "#bbf7d0" }}
+          thumbColor={isOn(item) ? "#16a34a" : "#f9fafb"}
+          ios_backgroundColor="#d7dedc"
+        />
+      </View>
+    ));
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -113,7 +218,9 @@ const Setting = () => {
                 size={13}
                 color="#006944"
               />
-              <Text style={styles.badgeText}>Green Level: Sage</Text>
+              <Text style={styles.badgeText}>
+                Green Level: {stats?.level.name ?? "…"}
+              </Text>
             </View>
           </View>
 
@@ -127,38 +234,11 @@ const Setting = () => {
 
         {/* ── Notifications ─────────────────────────────────────── */}
         <Text style={styles.sectionLabel}>Notifications</Text>
-        <View style={styles.card}>
-          {NOTIFICATIONS.map((item, idx) => (
-            <View
-              key={item.key}
-              style={[
-                styles.row,
-                idx < NOTIFICATIONS.length - 1 && styles.rowDivider,
-              ]}
-            >
-              <View
-                style={[styles.iconCircle, { backgroundColor: item.iconBg }]}
-              >
-                <MaterialCommunityIcons
-                  name={item.icon}
-                  size={22}
-                  color={item.iconColor}
-                />
-              </View>
-              <View style={styles.rowText}>
-                <Text style={styles.rowLabel}>{item.label}</Text>
-                <Text style={styles.rowSub}>{item.sub}</Text>
-              </View>
-              <Switch
-                value={toggles[item.key]}
-                onValueChange={() => toggle(item.key)}
-                trackColor={{ false: "#d7dedc", true: "#bbf7d0" }}
-                thumbColor={toggles[item.key] ? "#16a34a" : "#f9fafb"}
-                ios_backgroundColor="#d7dedc"
-              />
-            </View>
-          ))}
-        </View>
+        <View style={styles.card}>{renderToggles(NOTIFICATIONS)}</View>
+
+        {/* ── Privacy ───────────────────────────────────────────── */}
+        <Text style={styles.sectionLabel}>Privacy</Text>
+        <View style={styles.card}>{renderToggles(PRIVACY)}</View>
 
         {/* ── App Preferences ───────────────────────────────────── */}
         <Text style={styles.sectionLabel}>App Preferences</Text>
@@ -227,7 +307,7 @@ const Setting = () => {
             styles.logoutBtn,
             pressed && styles.logoutBtnPressed,
           ]}
-          onPress={() => signOut()}
+          onPress={handleLogout}
         >
           <Ionicons name="log-out-outline" size={20} color="#b31b25" />
           <Text style={styles.logoutText}>Log Out</Text>
@@ -238,7 +318,7 @@ const Setting = () => {
       <MeasurementModal
         modalVisible={unitsModalVisible}
         selectedValue={selectedUnit}
-        onSelect={(item) => setSelectedUnit(item.value)}
+        onSelect={(item) => saveSettings({ units: item.value as Units })}
         onClose={() => setUnitsModalVisible(false)}
       />
     </SafeAreaView>
@@ -408,7 +488,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   wikiBannerOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(0,40,20,0.55)",
   },
   wikiBannerContent: { paddingHorizontal: 22 },

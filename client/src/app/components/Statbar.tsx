@@ -1,8 +1,10 @@
 import { Animated, StyleSheet, Text, View } from "react-native";
 import React, { useEffect, useRef } from "react";
-import { MOCK_HISTORY, TOTAL_POINTS } from "@/utils/activityRecommendations";
+import { useStats } from "@/api/queries";
 import { T } from "@/constants/theme";
 function StatsBar() {
+  const { data: stats } = useStats();
+  const show = (n: number | undefined) => (n == null ? "–" : String(n));
   const opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(opacity, {
@@ -15,17 +17,17 @@ function StatsBar() {
   return (
     <Animated.View style={[styles.statsBar, { opacity }]}>
       <View style={styles.statItem}>
-        <Text style={styles.statNumber}>{MOCK_HISTORY.length}</Text>
+        <Text style={styles.statNumber}>{show(stats?.totalLogs)}</Text>
         <Text style={styles.statLabel}>Logged</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
-        <Text style={styles.statNumber}>{TOTAL_POINTS}</Text>
+        <Text style={styles.statNumber}>{show(stats?.totalPoints)}</Text>
         <Text style={styles.statLabel}>Total pts</Text>
       </View>
       <View style={styles.statDivider} />
       <View style={styles.statItem}>
-        <Text style={styles.statNumber}>3</Text>
+        <Text style={styles.statNumber}>{show(stats?.streak)}</Text>
         <Text style={styles.statLabel}>Day streak 🔥</Text>
       </View>
     </Animated.View>

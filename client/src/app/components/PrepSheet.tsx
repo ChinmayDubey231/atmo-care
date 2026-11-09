@@ -13,18 +13,34 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Badge } from "./activities-subcomponents";
 import { T } from "@/constants/theme";
+import { useLogActivity } from "@/api/queries";
 
 function PrepSheet({
   visible,
   item,
+  aqiLevel,
   onClose,
 }: {
   visible: boolean;
   item: ActivityDetails | null;
+  /** Live AQI level recorded with the log */
+  aqiLevel: number | null;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const translateY = useRef(new Animated.Value(300)).current;
+  const logActivity = useLogActivity();
+  const { reset } = logActivity;
+
+  // Fresh button state each time the sheet opens
+  useEffect(() => {
+    if (visible) reset();
+  }, [visible, item, reset]);
+
+  const handleLog = () => {
+    if (!item) return;
+    logActivity.mutate({ kind: "activity", key: item.key, aqiLevel });
+  };
 
   useEffect(() => {
     if (visible) {
@@ -79,9 +95,28 @@ function PrepSheet({
           </View>
         ))}
 
-        <TouchableOpacity style={styles.sheetCta} onPress={onClose}>
+        {logActivity.data ? (
+          <Text style={styles.resultText}>
+            {logActivity.data.alreadyEarnedToday
+              ? "Logged again — today's points for this one are already earned."
+              : `Nice work! +${logActivity.data.pointsAwarded} Eco Points`}
+          </Text>
+        ) : null}
+        {logActivity.error ? (
+          <Text style={styles.errorText}>{logActivity.error.message}</Text>
+        ) : null}
+
+        <TouchableOpacity
+          style={[styles.sheetCta, logActivity.isPending && { opacity: 0.6 }]}
+          onPress={logActivity.data ? onClose : handleLog}
+          disabled={logActivity.isPending}
+        >
           <Text style={styles.sheetCtaText}>
-            Log Activity · +{item.points} pts
+            {logActivity.data
+              ? "Done"
+              : logActivity.isPending
+                ? "Logging…"
+                : `Log Activity · +${item.points} pts`}
           </Text>
         </TouchableOpacity>
       </Animated.View>
@@ -177,5 +212,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "700",
+  },
+  resultText: {
+    marginTop: 16,
+    fontSize: 14,
+    fontWeight: "600",
+    color: T.green,
+    textAlign: "center",
+  },
+  errorText: {
+    marginTop: 16,
+    fontSize: 13,
+    color: T.red,
+    textAlign: "center",
   },
 });

@@ -1,38 +1,44 @@
+import { useAuth, useUser } from "@clerk/expo";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  Switch,
-  TouchableOpacity,
-  ScrollView,
-  Pressable,
   Alert,
   Linking,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  useWindowDimensions,
+  View,
 } from "react-native";
-import React, { useLayoutEffect, useState } from "react";
-import { useAuth, useUser } from "@clerk/expo";
-import { useNavigation, useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { Image } from "expo-image";
-import { useBottomTabBarHeight } from "expo-router/js-tabs";
-import MeasurementModal from "../components/MeasurementModal";
-import { getMeasurementLabel } from "../../utils/measurementUnitsConfig";
-import { getUserName } from "../../utils/userUtils";
+
 import { useApi, useMe, useStats, useUpdateMe } from "@/api/queries";
-import type { Settings, Units } from "@/api/types";
+import type { Settings } from "@/api/types";
+import { MeasurementSheet } from "@/components/MeasurementSheet";
+import { Sky, SkyScreen } from "@/components/Sky";
+import { Card, IconBubble } from "@/components/ui";
+import { BRAND_SKY, COLORS, FONTS, withAlpha } from "@/constants/theme";
 import {
   getExpoPushToken,
   getNotificationPermission,
   unregisterPushToken,
 } from "@/hooks/usePushNotifications";
+import {
+  displayUnits,
+  getMeasurementLabel,
+} from "@/utils/measurementUnitsConfig";
+import { getUserName } from "@/utils/userUtils";
+
+type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
 type ToggleItem = {
   key: string;
   setting: Exclude<keyof Settings, "units">;
   label: string;
   sub: string;
-  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  icon: IconName;
   iconColor: string;
   iconBg: string;
   defaultOn: boolean;
@@ -44,8 +50,8 @@ const NOTIFICATIONS: ToggleItem[] = [
     setting: "aqiAlerts",
     label: "AQI Alerts",
     sub: "Instant alerts for poor air quality",
-    icon: "weather-windy" as const,
-    iconColor: "#ef4444",
+    icon: "weather-windy",
+    iconColor: "#dc2626",
     iconBg: "#fee2e2",
     defaultOn: true,
   },
@@ -54,20 +60,10 @@ const NOTIFICATIONS: ToggleItem[] = [
     setting: "plantReminders",
     label: "Plant Reminders",
     sub: "Watering and care schedules",
-    icon: "sprout" as const,
-    iconColor: "#16a34a",
-    iconBg: "#dcfce7",
+    icon: "sprout",
+    iconColor: COLORS.primary,
+    iconBg: COLORS.primarySoft,
     defaultOn: false,
-  },
-  {
-    key: "community",
-    setting: "communityMessages",
-    label: "Community Messages",
-    sub: "Updates from local plant enthusiasts",
-    icon: "message-text" as const,
-    iconColor: "#2563eb",
-    iconBg: "#dbeafe",
-    defaultOn: true,
   },
 ];
 
@@ -78,7 +74,7 @@ const PRIVACY: ToggleItem[] = [
     label: "Show Me on Leaderboard",
     sub: "Only your first name and last initial",
     icon: "trophy-outline",
-    iconColor: "#ca8a04",
+    iconColor: COLORS.amber,
     iconBg: "#fef3c7",
     defaultOn: true,
   },
@@ -86,19 +82,79 @@ const PRIVACY: ToggleItem[] = [
 
 const PUSH_SETTINGS: ToggleItem["setting"][] = ["aqiAlerts", "plantReminders"];
 
+function SettingRow({
+  icon,
+  iconColor = COLORS.onSurfaceMuted,
+  iconBg = COLORS.surfaceLow,
+  label,
+  sub,
+  trailing,
+  onPress,
+}: {
+  icon: IconName;
+  iconColor?: string;
+  iconBg?: string;
+  label: string;
+  sub: string;
+  trailing?: React.ReactNode;
+  onPress?: () => void;
+}) {
+  const body = (
+    <>
+      <IconBubble size={40} tint={iconBg}>
+        <MaterialCommunityIcons name={icon} size={22} color={iconColor} />
+      </IconBubble>
+      <View style={styles.rowText}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.rowSub}>{sub}</Text>
+      </View>
+      {trailing}
+    </>
+  );
+
+  if (!onPress) return <View style={styles.row}>{body}</View>;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}, ${sub}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+    >
+      {body}
+    </Pressable>
+  );
+}
+
+function Group({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.group}>
+      <Text accessibilityRole="header" style={styles.groupLabel}>
+        {label}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
+const RowDivider = () => <View style={styles.rowDivider} />;
+
 const Setting = () => {
   const { signOut } = useAuth();
   const { user } = useUser();
-  const navigation = useNavigation();
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const api = useApi();
   const { data: me } = useMe();
   const { data: stats } = useStats();
   const updateMe = useUpdateMe();
 
-  const tabBarHeight = useBottomTabBarHeight();
-
-  const [unitsModalVisible, setUnitsModalVisible] = useState(false);
+  const [unitsVisible, setUnitsVisible] = useState(false);
   const selectedUnit = me?.settings.units ?? "metric";
 
   const isOn = (item: ToggleItem) =>
@@ -143,415 +199,287 @@ const Setting = () => {
   };
 
   const renderToggles = (items: ToggleItem[]) =>
-    items.map((item, idx) => (
-      <View
-        key={item.key}
-        style={[styles.row, idx < items.length - 1 && styles.rowDivider]}
-      >
-        <View style={[styles.iconCircle, { backgroundColor: item.iconBg }]}>
-          <MaterialCommunityIcons
-            name={item.icon}
-            size={22}
-            color={item.iconColor}
-          />
-        </View>
-        <View style={styles.rowText}>
-          <Text style={styles.rowLabel}>{item.label}</Text>
-          <Text style={styles.rowSub}>{item.sub}</Text>
-        </View>
-        <Switch
-          value={isOn(item)}
-          onValueChange={() => toggle(item)}
-          disabled={!me}
-          trackColor={{ false: "#d7dedc", true: "#bbf7d0" }}
-          thumbColor={isOn(item) ? "#16a34a" : "#f9fafb"}
-          ios_backgroundColor="#d7dedc"
+    items.map((item, index) => (
+      <React.Fragment key={item.key}>
+        {index > 0 ? <RowDivider /> : null}
+        <SettingRow
+          icon={item.icon}
+          iconColor={item.iconColor}
+          iconBg={item.iconBg}
+          label={item.label}
+          sub={item.sub}
+          trailing={
+            <Switch
+              accessibilityLabel={item.label}
+              value={isOn(item)}
+              onValueChange={() => toggle(item)}
+              disabled={!me}
+              trackColor={{ false: COLORS.border, true: COLORS.primary }}
+              thumbColor={COLORS.card}
+              ios_backgroundColor={COLORS.border}
+            />
+          }
         />
-      </View>
+      </React.Fragment>
     ));
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerTitle: "",
-      headerLeft: () => (
-        <View style={styles.headerLeft}>
-          <Ionicons name="location" size={22} color="#16a34a" />
-          <Text style={styles.headerTitle}>Settings</Text>
-        </View>
-      ),
-      headerRight: () => (
-        <View style={styles.headerRight}>
-          <Ionicons name="leaf" size={22} color="#16a34a" />
-        </View>
-      ),
-      headerStyle: { backgroundColor: "#f3f7f5" },
-    });
-  }, [navigation]);
-
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingBottom: tabBarHeight + 16 },
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* ── User Card ─────────────────────────────────────────── */}
-        <View style={styles.userCard}>
-          <View style={styles.avatarWrapper}>
+    <>
+      <SkyScreen
+        tabbed
+        heroHeight={236}
+        skyScale={0.62}
+        sheetStyle={styles.sheet}
+        hero={
+          <View style={styles.profile}>
             <Image
               source={{ uri: user?.imageUrl }}
-              style={styles.userImage}
+              style={styles.avatar}
               contentFit="cover"
             />
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark" size={10} color="#005c2d" />
-            </View>
-          </View>
-
-          <View style={styles.userDetails}>
-            <Text style={styles.userName}>{getUserName(user)}</Text>
-            <View style={styles.badge}>
-              <MaterialCommunityIcons
-                name="pine-tree"
-                size={13}
-                color="#006944"
-              />
-              <Text style={styles.badgeText}>
-                Green Level: {stats?.level.name ?? "…"}
+            <View style={styles.details}>
+              <Text
+                accessibilityRole="header"
+                style={styles.name}
+                numberOfLines={1}
+              >
+                {getUserName(user)}
               </Text>
+              <View style={styles.levelPill}>
+                <MaterialCommunityIcons
+                  name="pine-tree"
+                  size={14}
+                  color={BRAND_SKY.mist}
+                />
+                <Text style={styles.levelText}>
+                  Green level: {stats?.level.name ?? "…"}
+                </Text>
+              </View>
             </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile"
+              hitSlop={8}
+              onPress={() => router.push("/profile/edit-user")}
+              style={styles.edit}
+            >
+              <MaterialIcons name="edit" size={20} color={COLORS.onPrimary} />
+            </Pressable>
           </View>
+        }
+      >
+        <Group label="Notifications">
+          <Card>{renderToggles(NOTIFICATIONS)}</Card>
+        </Group>
 
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() => router.push("/profile/edit-user")}
+        <Group label="Privacy">
+          <Card>{renderToggles(PRIVACY)}</Card>
+        </Group>
+
+        <Group label="App preferences">
+          <Card>
+            <SettingRow
+              icon="database"
+              label="Data Source"
+              sub="OpenWeather"
+            />
+            <RowDivider />
+            <SettingRow
+              icon="ruler"
+              label="Measurement Units"
+              sub={getMeasurementLabel(selectedUnit)}
+              onPress={() => setUnitsVisible(true)}
+              trailing={
+                <MaterialIcons
+                  name="chevron-right"
+                  size={22}
+                  color={COLORS.placeholder}
+                />
+              }
+            />
+          </Card>
+        </Group>
+
+        <Group label="Resources">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Plant Wiki. Identify and learn about your greenery"
+            onPress={() => router.push("/wiki/plant-wiki")}
+            style={({ pressed }) => [
+              styles.wiki,
+              pressed && styles.wikiPressed,
+            ]}
           >
-            <Ionicons name="create-outline" size={18} color="#585c5b" />
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Notifications ─────────────────────────────────────── */}
-        <Text style={styles.sectionLabel}>Notifications</Text>
-        <View style={styles.card}>{renderToggles(NOTIFICATIONS)}</View>
-
-        {/* ── Privacy ───────────────────────────────────────────── */}
-        <Text style={styles.sectionLabel}>Privacy</Text>
-        <View style={styles.card}>{renderToggles(PRIVACY)}</View>
-
-        {/* ── App Preferences ───────────────────────────────────── */}
-        <Text style={styles.sectionLabel}>App Preferences</Text>
-        <View style={styles.prefGrid}>
-          <TouchableOpacity key="datasource" style={styles.prefCard}>
-            <MaterialCommunityIcons name="database" size={22} color="#006a35" />
-            <View style={styles.prefText}>
-              <Text style={styles.rowLabel}>Data Source</Text>
-              <Text style={styles.rowSub}>Global Monitoring</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#aaaeac" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            key="units"
-            style={styles.prefCard}
-            onPress={() => setUnitsModalVisible(true)}
-          >
-            <MaterialCommunityIcons name="ruler" size={22} color="#006a35" />
-            <View style={styles.prefText}>
-              <Text style={styles.rowLabel}>Measurement Units</Text>
-              <Text style={styles.rowSub}>
-                {getMeasurementLabel(selectedUnit)}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color="#aaaeac" />
-          </TouchableOpacity>
-        </View>
-
-        {/* ── Resources ─────────────────────────────────────────── */}
-        <Text style={styles.sectionLabel}>Resources</Text>
-
-        {/* Plant Wiki banner */}
-        <TouchableOpacity
-          style={styles.wikiBanner}
-          activeOpacity={0.85}
-          onPress={() => router.push("/wiki/plant-wiki")}
-        >
-          <View style={styles.wikiBannerOverlay} />
-          <View style={styles.wikiBannerContent}>
+            <Sky scale={0.34} frameWidth={width - 48} centerX={0.84} still />
             <Text style={styles.wikiTitle}>Plant Wiki</Text>
             <Text style={styles.wikiSub}>
               Identify & learn about your greenery
             </Text>
-            <View style={styles.wikiCta}>
-              <Text style={styles.wikiCtaText}>Explore Now</Text>
-              <Ionicons name="arrow-forward" size={13} color="#6bfe9c" />
-            </View>
-          </View>
-        </TouchableOpacity>
+          </Pressable>
+          <Card>
+            <SettingRow
+              icon="help-circle-outline"
+              label="Help Center & Support"
+              sub="Coming soon"
+            />
+          </Card>
+        </Group>
 
-        <TouchableOpacity style={styles.helpBtn}>
-          <Ionicons name="help-circle-outline" size={22} color="#585c5b" />
-          <Text style={styles.helpText}>Help Center & Support</Text>
-          <Ionicons
-            name="open-outline"
-            size={16}
-            color="#aaaeac"
-            style={{ marginLeft: "auto" }}
-          />
-        </TouchableOpacity>
-
-        {/* ── Log Out ───────────────────────────────────────────── */}
         <Pressable
-          style={({ pressed }) => [
-            styles.logoutBtn,
-            pressed && styles.logoutBtnPressed,
-          ]}
+          accessibilityRole="button"
           onPress={handleLogout}
+          style={({ pressed }) => [
+            styles.logout,
+            pressed && styles.logoutPressed,
+          ]}
         >
-          <Ionicons name="log-out-outline" size={20} color="#b31b25" />
-          <Text style={styles.logoutText}>Log Out</Text>
+          <MaterialIcons name="logout" size={20} color={COLORS.error} />
+          <Text style={styles.logoutText}>Log out</Text>
         </Pressable>
 
-        <Text style={styles.version}>Atmosphere v1.0.0</Text>
-      </ScrollView>
-      <MeasurementModal
-        modalVisible={unitsModalVisible}
-        selectedValue={selectedUnit}
-        onSelect={(item) => saveSettings({ units: item.value as Units })}
-        onClose={() => setUnitsModalVisible(false)}
+        <Text style={styles.version}>Breathe v1.0.0</Text>
+      </SkyScreen>
+
+      <MeasurementSheet
+        visible={unitsVisible}
+        selectedValue={displayUnits(selectedUnit)}
+        onSelect={(item) => saveSettings({ units: item.value })}
+        onClose={() => setUnitsVisible(false)}
       />
-    </SafeAreaView>
+    </>
   );
 };
 
-// ── Styles ─────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  // Header
-  headerLeft: {
+  sheet: { gap: 22 },
+
+  profile: {
     flexDirection: "row",
     alignItems: "center",
-    marginLeft: 14,
-    gap: 6,
-  },
-  headerTitle: {
-    fontSize: 20,
-    color: "#16a34a",
-    fontWeight: "700",
-  },
-  headerRight: { marginRight: 14 },
-
-  // Screen
-  container: { flex: 1, backgroundColor: "#f3f7f5" },
-  scroll: { padding: 16, gap: 0 },
-
-  // Section label
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    color: "#737876",
-    marginTop: 24,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-
-  // User Card
-  userCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 20,
-    borderRadius: 20,
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
     gap: 14,
     marginTop: 8,
   },
-  avatarWrapper: { position: "relative" },
-  userImage: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    backgroundColor: "#d7dedc",
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 3,
-    borderColor: "#edf2f0",
+    borderColor: withAlpha(BRAND_SKY.mist, 0.5),
+    backgroundColor: COLORS.primarySoft,
   },
-  verifiedBadge: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "#6bfe9c",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#ffffff",
+  details: { flex: 1, gap: 6 },
+  name: {
+    fontFamily: FONTS.display,
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.4,
+    color: COLORS.onPrimary,
   },
-  userDetails: { flex: 1, gap: 6 },
-  userName: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#2b302f",
-    letterSpacing: -0.3,
-  },
-  badge: {
+  levelPill: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
     gap: 4,
+    paddingLeft: 10,
+    paddingRight: 12,
     paddingVertical: 4,
-    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: withAlpha(BRAND_SKY.mist, 0.2),
+  },
+  levelText: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.onPrimary,
+  },
+  edit: {
+    width: 40,
+    height: 40,
     borderRadius: 20,
-    backgroundColor: "#6decae30",
-  },
-  badgeText: {
-    fontSize: 11,
-    color: "#005436",
-    fontWeight: "700",
-    letterSpacing: 0.5,
-    textTransform: "uppercase",
-  },
-  editBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#edf2f0",
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: withAlpha(BRAND_SKY.mist, 0.2),
   },
 
-  // Generic card
-  card: {
-    borderRadius: 20,
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-    overflow: "hidden",
+  group: { gap: 8 },
+  groupLabel: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 13,
+    lineHeight: 18,
+    color: COLORS.onSurfaceMuted,
   },
 
-  // Row (notification)
   row: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 16,
     gap: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
   },
-  rowDivider: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#edf2f0",
+  rowPressed: { backgroundColor: COLORS.surface },
+  rowText: { flex: 1, gap: 2 },
+  rowLabel: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: COLORS.onSurface,
   },
-  iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
+  rowSub: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: COLORS.onSurfaceMuted,
+  },
+  rowDivider: { height: 1, marginLeft: 70, backgroundColor: COLORS.border },
+
+  wiki: {
+    height: 112,
     justifyContent: "center",
-  },
-  rowText: { flex: 1 },
-  rowLabel: { fontSize: 14, fontWeight: "600", color: "#2b302f" },
-  rowSub: { fontSize: 12, color: "#585c5b", marginTop: 2 },
-
-  // Prefs grid
-  prefGrid: { gap: 10 },
-  prefCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    gap: 14,
-  },
-  prefText: { flex: 1 },
-
-  // Wiki banner
-  wikiBanner: {
-    height: 120,
+    paddingHorizontal: 20,
     borderRadius: 20,
-    backgroundColor: "#064e3b",
     overflow: "hidden",
-    justifyContent: "center",
-    marginBottom: 10,
+    gap: 2,
   },
-  wikiBannerOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0,40,20,0.55)",
-  },
-  wikiBannerContent: { paddingHorizontal: 22 },
+  wikiPressed: { transform: [{ scale: 0.98 }] },
   wikiTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#ffffff",
-    letterSpacing: -0.5,
+    fontFamily: FONTS.heading,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.2,
+    color: COLORS.onPrimary,
   },
-  wikiSub: { fontSize: 13, color: "#a7f3d0", marginTop: 2 },
-  wikiCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 8,
-  },
-  wikiCtaText: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#6bfe9c",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
+  wikiSub: {
+    maxWidth: 230,
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: BRAND_SKY.mist,
   },
 
-  // Help button
-  helpBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: "#ffffff",
-    gap: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  helpText: { fontSize: 14, fontWeight: "600", color: "#2b302f" },
-
-  // Log out
-  logoutBtn: {
+  logout: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    marginTop: 28,
-    paddingVertical: 16,
-    borderRadius: 50,
-    backgroundColor: "#e4e9e7",
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
   },
-  logoutBtnPressed: { backgroundColor: "#fee2e2" },
-  logoutText: { fontSize: 15, fontWeight: "700", color: "#b31b25" },
-
-  // Version
+  logoutPressed: { backgroundColor: COLORS.errorContainer },
+  logoutText: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: COLORS.error,
+  },
   version: {
     textAlign: "center",
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    color: "#aaaeac",
-    marginTop: 16,
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.onSurfaceMuted,
   },
 });
 

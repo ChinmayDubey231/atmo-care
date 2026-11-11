@@ -12,7 +12,8 @@ export interface Plant {
   badgeIconColor: string;
   level: PlantLevel;
   filters: string[];
-  image: string;
+  /** A web address, or a photo bundled with the app (`require(...)`) */
+  image: string | number;
   categoryKeys: string[];
   requirements: {
     light: "Low" | "Indirect" | "Full Sun";
@@ -21,6 +22,10 @@ export interface Plant {
   };
   petSafe: boolean;
 }
+
+/** Image source for a plant photo, whether bundled or on the web */
+export const plantImage = (image: Plant["image"]) =>
+  typeof image === "number" ? image : { uri: image };
 
 export const PLANTS: Plant[] = [
   {
@@ -34,7 +39,7 @@ export const PLANTS: Plant[] = [
     level: "Moderate",
     filters: ["Formaldehyde", "Xylene"],
     image:
-      "https://plus.unsplash.com/premium_photo-1663962158789-0ab624c4f17d?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MXx8bW9uc3RlcmF8ZW58MHx8MHx8fDA%3D",
+      "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=800&q=80",
     categoryKeys: ["all", "air"],
     requirements: { light: "Indirect", water: "Moderate", humidity: "60%+" },
     petSafe: false,
@@ -65,8 +70,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#ef4444",
     level: "Beginner",
     filters: ["Chemicals", "Formaldehyde"],
-    image:
-      "https://images.unsplash.com/photo-1587334274328-64186a80aeee?w=800&q=80",
+    image: require("@/assets/images/plants/aloe.jpg"),
     categoryKeys: ["all", "succulent"],
     requirements: { light: "Full Sun", water: "Low", humidity: "30%+" },
     petSafe: false,
@@ -82,7 +86,7 @@ export const PLANTS: Plant[] = [
     level: "Beginner",
     filters: ["Benzene", "Xylene", "Toluene"],
     image:
-      "https://images.unsplash.com/photo-1558693168-c370615b54e0?w=800&q=80",
+      "https://images.unsplash.com/photo-1598880940080-ff9a29891b85?w=800&q=80",
     categoryKeys: ["all", "air", "lowlight"],
     requirements: { light: "Low", water: "Low", humidity: "40%+" },
     petSafe: false,
@@ -97,8 +101,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#2563eb",
     level: "Beginner",
     filters: ["Nitrogen Oxide", "Formaldehyde"],
-    image:
-      "https://images.unsplash.com/photo-1572688484438-313a6e50c333?w=800&q=80",
+    image: require("@/assets/images/plants/snakeplant.jpg"),
     categoryKeys: ["all", "air", "lowlight", "succulent"],
     requirements: { light: "Low", water: "Low", humidity: "30%+" },
     petSafe: false,
@@ -129,8 +132,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#0ea5e9",
     level: "Moderate",
     filters: ["Formaldehyde", "Xylene"],
-    image:
-      "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=800&q=80",
+    image: require("@/assets/images/plants/fern.jpg"),
     categoryKeys: ["all", "air", "pet"],
     requirements: { light: "Indirect", water: "High", humidity: "70%+" },
     petSafe: true,
@@ -162,7 +164,7 @@ export const PLANTS: Plant[] = [
     level: "Beginner",
     filters: ["Carbon Monoxide", "Formaldehyde"],
     image:
-      "https://images.unsplash.com/photo-1545241047-6083a3684587?w=800&q=80",
+      "https://images.unsplash.com/photo-1501004318641-b39e6451bec6?w=800&q=80",
     categoryKeys: ["all", "air"],
     requirements: { light: "Indirect", water: "Moderate", humidity: "40%+" },
     petSafe: false,
@@ -177,8 +179,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#f59e0b",
     level: "Advanced",
     filters: ["Formaldehyde", "Benzene"],
-    image:
-      "https://images.unsplash.com/photo-1598880940080-ff9a29891b85?w=800&q=80",
+    image: require("@/assets/images/plants/fiddle_leaf.jpg"),
     categoryKeys: ["all", "air"],
     requirements: { light: "Indirect", water: "Moderate", humidity: "50%+" },
     petSafe: false,
@@ -193,8 +194,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#0ea5e9",
     level: "Moderate",
     filters: ["Formaldehyde", "Xylene"],
-    image:
-      "https://images.unsplash.com/photo-1614594975525-e45190c55d0b?w=800&q=80",
+    image: require("@/assets/images/plants/calathea_orb.jpg"),
     categoryKeys: ["all", "air", "pet"],
     requirements: { light: "Indirect", water: "High", humidity: "60%+" },
     petSafe: true,
@@ -209,8 +209,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#7c2d12",
     level: "Moderate",
     filters: ["Mold Spores", "Benzene"],
-    image:
-      "https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=800&q=80",
+    image: require("@/assets/images/plants/english_ivy.jpg"),
     categoryKeys: ["all", "air"],
     requirements: { light: "Indirect", water: "Moderate", humidity: "50%+" },
     petSafe: false,
@@ -241,8 +240,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#16a34a",
     level: "Beginner",
     filters: ["Formaldehyde", "Benzene"],
-    image:
-      "https://images.unsplash.com/photo-1663436145336-1c5bb2c373c1?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTZ8fG1vbmV5JTIwdHJlZXxlbnwwfHwwfHx8MA%3D%3D",
+    image: require("@/assets/images/plants/money_tree.jpg"),
     categoryKeys: ["all", "air", "pet"],
     requirements: { light: "Indirect", water: "Moderate", humidity: "50%+" },
     petSafe: true,
@@ -257,8 +255,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#fb923c",
     level: "Moderate",
     filters: ["CO2", "Dust"],
-    image:
-      "https://images.unsplash.com/photo-1598512752271-33f913a5af13?w=800&q=80",
+    image: require("@/assets/images/plants/bird_of_paradise.jpg"),
     categoryKeys: ["all"],
     requirements: { light: "Full Sun", water: "Moderate", humidity: "50%+" },
     petSafe: false,
@@ -273,8 +270,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#064e3b",
     level: "Beginner",
     filters: ["Particulates", "Toluene"],
-    image:
-      "https://images.unsplash.com/photo-1509423350716-97f9360b4e09?w=800&q=80",
+    image: require("@/assets/images/plants/jade_plant.jpg"),
     categoryKeys: ["all", "succulent"],
     requirements: { light: "Full Sun", water: "Low", humidity: "30%+" },
     petSafe: false,
@@ -289,8 +285,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#db2777",
     level: "Beginner",
     filters: ["Benzene", "Trichloroethylene"],
-    image:
-      "https://plus.unsplash.com/premium_photo-1663961915616-0ebe4f6f73db?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MXx8cGFybG9yJTIwcGFsbXxlbnwwfHwwfHx8MA%3D%3D",
+    image: require("@/assets/images/plants/parlor_palm.jpg"),
     categoryKeys: ["all", "lowlight", "pet"],
     requirements: { light: "Low", water: "Moderate", humidity: "50%+" },
     petSafe: true,
@@ -305,8 +300,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#991b1b",
     level: "Beginner",
     filters: ["Xylene", "Trichloroethylene"],
-    image:
-      "https://images.unsplash.com/photo-1493962853295-0fd70327578a?w=800&q=80",
+    image: require("@/assets/images/plants/dracaena.jpg"),
     categoryKeys: ["all", "air", "lowlight"],
     requirements: { light: "Low", water: "Low", humidity: "40%+" },
     petSafe: false,
@@ -321,8 +315,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#1e293b",
     level: "Beginner",
     filters: ["Chemicals", "Smoke"],
-    image:
-      "https://images.unsplash.com/photo-1602923668104-8f9e03e77e62?w=800&q=80",
+    image: require("@/assets/images/plants/cast_iron.jpg"),
     categoryKeys: ["all", "lowlight"],
     requirements: { light: "Low", water: "Low", humidity: "30%+" },
     petSafe: true,
@@ -353,8 +346,7 @@ export const PLANTS: Plant[] = [
     badgeIconColor: "#6d28d9",
     level: "Moderate",
     filters: ["Formaldehyde"],
-    image:
-      "https://plus.unsplash.com/premium_photo-1673615874537-65fdf1c772ee?w=900&auto=format&fit=crop&q=60&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MXx8UHJheWVyJTIwUGxhbnR8ZW58MHx8MHx8fDA%3D",
+    image: require("@/assets/images/plants/prayer_plant.jpg"),
     categoryKeys: ["all", "pet"],
     requirements: { light: "Indirect", water: "High", humidity: "60%+" },
     petSafe: true,

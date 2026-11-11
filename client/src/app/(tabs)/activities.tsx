@@ -1,671 +1,344 @@
-import React, {
-  useState,
-  useCallback,
-  useRef,
-  useEffect,
-  useLayoutEffect,
-} from "react";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import React, { useState } from "react";
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  StyleSheet,
-  Animated,
   ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import PrepSheet from "../components/PrepSheet";
-import { ActivityDetails, AqiMeta } from "@/types/activities_type";
-import {
-  Badge,
-  PointsPill,
-  SectionHeader,
-} from "../components/activities-subcomponents";
-import {
-  AQI_META,
-  aqiTag,
-  emojiFor,
-  formatLogDate,
-  getRecommendedActivities,
-} from "@/utils/activityRecommendations";
-import StatsBar from "../components/Statbar";
-import { Leaderboard } from "../components/Leaderboard";
-import { T } from "@/constants/theme";
-import { useNavigation } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+
 import { useLogs, useStats } from "@/api/queries";
 import type { LogItem } from "@/api/types";
+import { ActivityPhotoCard, ActivityTile } from "@/components/ActivityCards";
+import { Leaderboard } from "@/components/Leaderboard";
+import { PrepSheet } from "@/components/PrepSheet";
+import { SkyScreen } from "@/components/Sky";
+import { Card, IconBubble, Section } from "@/components/ui";
+import { AIR_LEVELS, getAirLevel } from "@/constants/air";
+import { COLORS, FONTS, withAlpha } from "@/constants/theme";
 import { useAirQuality } from "@/hooks/useAirQuality";
+import type { ActivityDetails } from "@/types/activities_type";
+import {
+  formatLogDate,
+  getRecommendedActivities,
+  iconForLog,
+} from "@/utils/activityRecommendations";
 
-function AqiHero({
-  meta,
-  aqiLevel,
-  isPreview,
-  hasLive,
-  onLevelChange,
-  onBackToLive,
-}: {
-  meta: AqiMeta;
-  aqiLevel: number;
-  isPreview: boolean;
-  hasLive: boolean;
-  onLevelChange: (level: number) => void;
-  onBackToLive: () => void;
-}) {
-  return (
-    <LinearGradient
-      colors={[meta.gradStart, meta.gradEnd]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.hero}
-    >
-      <Text style={styles.heroLabel}>AIR QUALITY INDEX</Text>
-      <View style={styles.heroRow}>
-        <Text style={styles.heroNumber}>{meta.num}</Text>
-        <Text style={styles.heroStatus}>{meta.label}</Text>
-      </View>
-      <Text style={styles.heroDesc}>{meta.desc}</Text>
-
-      {/* AQI level dots */}
-      <View style={styles.aqiDots}>
-        {AQI_META.map((m) => (
-          <TouchableOpacity
-            key={m.level}
-            onPress={() => onLevelChange(m.level)}
-            style={[styles.aqiDot, aqiLevel === m.level && styles.aqiDotActive]}
-          >
-            <Text style={styles.aqiDotLabel}>{m.label[0]}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-      {isPreview && hasLive ? (
-        <TouchableOpacity onPress={onBackToLive}>
-          <Text style={styles.aqiHint}>Previewing · Tap here for live AQI</Text>
-        </TouchableOpacity>
-      ) : (
-        <Text style={styles.aqiHint}>
-          {hasLive ? "Live for your location · " : ""}Tap to preview AQI level
-        </Text>
-      )}
-    </LinearGradient>
-  );
+function timeOfDay(hour: number): string {
+  if (hour >= 12 && hour < 17) return "Afternoon";
+  if (hour >= 17 && hour < 21) return "Evening";
+  if (hour >= 21 || hour < 5) return "Night";
+  return "Morning";
 }
 
-function PrimaryCard({
-  item,
-  onPress,
-}: {
-  item: ActivityDetails;
-  onPress: () => void;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-
-  const onPressIn = () =>
-    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start();
-  const onPressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
-
+function HistoryRow({ item }: { item: LogItem }) {
+  const air = item.aqiLevel != null ? getAirLevel(item.aqiLevel) : null;
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <TouchableOpacity
-        activeOpacity={0.95}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        onPress={onPress}
-        style={styles.primaryCard}
-      >
-        <Image source={{ uri: item.image }} style={styles.primaryImage} />
-        <View style={styles.primaryBody}>
-          <Badge label={item.badge} />
-          <Text style={styles.primaryTitle}>{item.title}</Text>
-          <Text style={styles.primarySubtitle} numberOfLines={2}>
-            {item.subtitle}
-          </Text>
-          <View style={styles.primaryFooter}>
-            <PointsPill points={item.points} />
-            <View style={styles.seeTipsBtn}>
-              <Text style={styles.seeTipsBtnText}>See Tips →</Text>
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-function SecondaryCard({
-  item,
-  onPress,
-  delay = 0,
-}: {
-  item: ActivityDetails;
-  onPress: () => void;
-  delay?: number;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: 400,
-      delay,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  const onPressIn = () =>
-    Animated.spring(scale, { toValue: 0.96, useNativeDriver: true }).start();
-  const onPressOut = () =>
-    Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start();
-
-  const iconBg = (item.color ?? T.green) + "20";
-
-  return (
-    <Animated.View
-      style={[styles.secondaryCardWrap, { opacity, transform: [{ scale }] }]}
-    >
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPressIn={onPressIn}
-        onPressOut={onPressOut}
-        onPress={onPress}
-        style={styles.secondaryCard}
-      >
-        <View style={[styles.secIcon, { backgroundColor: iconBg }]}>
-          <Text style={styles.secIconEmoji}>{emojiFor(item.icon)}</Text>
-        </View>
-        <Text style={styles.secAlert}>{item.alert}</Text>
-        <Text style={styles.secTitle}>{item.title}</Text>
-        <Text style={styles.secPoints}>+{item.points} pts</Text>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-}
-
-function HistoryRow({ item, index }: { item: LogItem; index: number }) {
-  const tag = aqiTag(item.aqiLevel);
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: 350,
-      delay: index * 60,
-      useNativeDriver: true,
-    }).start();
-  }, []);
-
-  return (
-    <Animated.View style={[styles.historyRow, { opacity }]}>
-      <View style={styles.historyEmoji}>
-        <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
+    <View style={styles.logRow}>
+      <View style={styles.logIcon}>
+        <MaterialCommunityIcons
+          name={iconForLog(item.key)}
+          size={22}
+          color={COLORS.primary}
+        />
       </View>
-      <View style={styles.historyInfo}>
-        <Text style={styles.historyTitle}>{item.title}</Text>
-        <Text style={styles.historyDate}>{formatLogDate(item.loggedAt)}</Text>
+      <View style={styles.logText}>
+        <Text style={styles.logTitle}>{item.title}</Text>
+        <Text style={styles.logDate}>{formatLogDate(item.loggedAt)}</Text>
       </View>
-      <View style={styles.historyRight}>
-        {tag ? (
-          <View style={[styles.aqiTag, { backgroundColor: tag.color + "18" }]}>
-            <Text style={[styles.aqiTagText, { color: tag.color }]}>
-              {tag.label}
+      <View style={styles.logRight}>
+        {air ? (
+          <View style={[styles.logTag, { backgroundColor: air.tint }]}>
+            <Text style={[styles.logTagText, { color: air.accent }]}>
+              {air.label}
             </Text>
           </View>
         ) : null}
-        <Text style={styles.historyPoints}>+{item.points}</Text>
+        <Text style={styles.logPoints}>+{item.points}</Text>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
-// Main Screen
 export default function ActivitiesScreen() {
-  const insets = useSafeAreaInsets();
-  const now = new Date();
-  const currentHour = now.getHours();
-  const navigation = useNavigation();
-
   const { stats: air } = useAirQuality();
   const liveLevel = air?.aqi ?? null;
   const [previewLevel, setPreviewLevel] = useState<number | null>(null);
   const aqiLevel = previewLevel ?? liveLevel ?? 1;
+
   const { data: logs, isLoading: logsLoading, error: logsError } = useLogs();
   const { data: stats } = useStats();
   const [sheetItem, setSheetItem] = useState<ActivityDetails | null>(null);
   const [sheetVisible, setSheetVisible] = useState(false);
 
-  const meta = AQI_META[aqiLevel - 1];
+  const currentHour = new Date().getHours();
+  const level = getAirLevel(aqiLevel);
   const history = logs?.items ?? [];
-  const recs = getRecommendedActivities(aqiLevel, currentHour);
+  const recommended = getRecommendedActivities(aqiLevel, currentHour);
+  const tod = timeOfDay(currentHour);
+  const palette = level.sky;
 
-  const openSheet = useCallback((item: any) => {
+  const isPreview = previewLevel != null && previewLevel !== liveLevel;
+  const hasLive = liveLevel != null;
+
+  const openSheet = (item: ActivityDetails) => {
     setSheetItem(item);
     setSheetVisible(true);
-  }, []);
+  };
 
-  const closeSheet = useCallback(() => {
-    setSheetVisible(false);
-  }, []);
-
-  const todStr = (() => {
-    let tod = "Morning";
-    if (currentHour >= 12 && currentHour < 17) tod = "Afternoon";
-    else if (currentHour >= 17 && currentHour < 21) tod = "Evening";
-    else if (currentHour >= 21 || currentHour < 5) tod = "Night";
-    return tod;
-  })();
-
-  const HeaderLeft = useCallback(
-    () => (
-      <View style={styles.headerLeft}>
-        <Ionicons name="location" size={22} color={T.green} />
-        <Text style={styles.headerTitle}>AirWise</Text>
-      </View>
-    ),
-    [],
-  );
-
-  const HeaderRight = useCallback(
-    () => (
-      <View style={styles.headerRight}>
-        <Ionicons name="leaf" size={22} color="#16a34a" />
-      </View>
-    ),
-    [],
-  );
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerTitle: "",
-      headerShown: true,
-      headerLeft: HeaderLeft,
-      headerRight: HeaderRight,
-      headerStyle: {
-        backgroundColor: T.surface,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: T.border,
-      },
-      headerShadowVisible: false,
-    });
-  }, [navigation, HeaderLeft, HeaderRight]);
+  const show = (n: number | undefined) => (n == null ? "–" : String(n));
 
   return (
-    <View style={[styles.root]}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
+    <>
+      <SkyScreen
+        tabbed
+        palette={palette}
+        heroHeight={320}
+        skyScale={0.8}
+        hero={
+          <View style={styles.hero}>
+            <View style={styles.copy}>
+              <Text accessibilityRole="header" style={styles.title}>
+                Activities
+              </Text>
+              <Text style={[styles.subtitle, { color: palette.mist }]}>
+                Picked for {level.label} air this {tod.toLowerCase()}
+              </Text>
+            </View>
+
+            <View style={styles.picker}>
+              <View style={styles.levels} accessibilityRole="radiogroup">
+                {AIR_LEVELS.map((item) => {
+                  const selected = aqiLevel === item.level;
+                  return (
+                    <Pressable
+                      key={item.level}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`Preview ${item.label} air`}
+                      accessibilityState={{ checked: selected }}
+                      hitSlop={4}
+                      onPress={() => setPreviewLevel(item.level)}
+                      style={[
+                        styles.level,
+                        {
+                          backgroundColor: selected
+                            ? palette.mist
+                            : withAlpha(palette.mist, 0.2),
+                        },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.levelText,
+                          selected && { color: palette.base },
+                        ]}
+                      >
+                        {item.level}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {isPreview && hasLive ? (
+                <View style={styles.hint}>
+                  <Text style={[styles.hintText, { color: palette.mist }]}>
+                    Previewing {level.label} air
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    hitSlop={10}
+                    onPress={() => setPreviewLevel(null)}
+                  >
+                    <Text style={styles.backToLive}>Back to live</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Text style={[styles.hintText, { color: palette.mist }]}>
+                  {hasLive ? "Live for your location · " : ""}Tap to preview
+                </Text>
+              )}
+            </View>
+          </View>
+        }
       >
-        {/* ── AQI HERO ── */}
-        <AqiHero
-          meta={meta}
-          aqiLevel={aqiLevel}
-          isPreview={previewLevel != null && previewLevel !== liveLevel}
-          hasLive={liveLevel != null}
-          onLevelChange={setPreviewLevel}
-          onBackToLive={() => setPreviewLevel(null)}
-        />
+        <Card style={styles.stats}>
+          {[
+            { value: show(stats?.totalLogs), label: "Logged" },
+            { value: show(stats?.totalPoints), label: "Total points" },
+            { value: show(stats?.streak), label: "Day streak" },
+          ].map(({ value, label }, index) => (
+            <React.Fragment key={label}>
+              {index > 0 ? <View style={styles.statDivider} /> : null}
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{value}</Text>
+                <Text style={styles.statLabel}>{label}</Text>
+              </View>
+            </React.Fragment>
+          ))}
+        </Card>
 
-        {/* ── STATS ── */}
-        <StatsBar />
-
-        {/* ── TODAY'S RECOMMENDATIONS ── */}
-        <SectionHeader
-          title="Today's Top Pick"
-          sub={`Based on ${meta.label} AQI · ${todStr}`}
-        />
-        <PrimaryCard
-          item={recs.primary}
-          onPress={() => openSheet(recs.primary)}
-        />
-
-        <View style={{ marginTop: 20 }}>
-          <SectionHeader title="Also Recommended" />
-        </View>
-        <View style={styles.secondaryGrid}>
-          <SecondaryCard
-            item={recs.secondary1}
-            onPress={() => openSheet(recs.secondary1)}
-            delay={60}
+        <Section title="Today's top pick" right={`${level.label} air · ${tod}`}>
+          <ActivityPhotoCard
+            item={recommended.primary}
+            onPress={() => openSheet(recommended.primary)}
           />
-          <SecondaryCard
-            item={recs.secondary2}
-            onPress={() => openSheet(recs.secondary2)}
-            delay={120}
-          />
-        </View>
+        </Section>
 
-        {/* ── LEADERBOARD ── */}
+        <Section title="Also recommended">
+          <View style={styles.tiles}>
+            <ActivityTile
+              item={recommended.secondary1}
+              onPress={() => openSheet(recommended.secondary1)}
+            />
+            <ActivityTile
+              item={recommended.secondary2}
+              onPress={() => openSheet(recommended.secondary2)}
+            />
+          </View>
+        </Section>
+
         <Leaderboard />
 
-        {/* ── LOGGED HISTORY ── */}
-        <View style={{ marginTop: 20 }}>
-          <SectionHeader
-            title="Activity Log"
-            sub={
-              stats ? `${stats.totalLogs} activities recorded` : undefined
-            }
-          />
-        </View>
-        <View style={styles.historyCard}>
-          {logsLoading ? (
-            <ActivityIndicator style={{ padding: 24 }} color={T.green} />
-          ) : logsError ? (
-            <Text style={styles.historyEmpty}>{logsError.message}</Text>
-          ) : history.length === 0 ? (
-            <Text style={styles.historyEmpty}>
-              Nothing logged yet. Pick an activity above to earn your first
-              Eco Points!
-            </Text>
-          ) : (
-            history.map((item, i) => (
-              <React.Fragment key={item.id}>
-                <HistoryRow item={item} index={i} />
-                {i < history.length - 1 && (
-                  <View style={styles.historyDivider} />
-                )}
-              </React.Fragment>
-            ))
-          )}
-        </View>
+        <Section
+          title="Activity log"
+          right={stats ? `${stats.totalLogs} activities recorded` : undefined}
+        >
+          <Card>
+            {logsLoading ? (
+              <ActivityIndicator
+                style={styles.spinner}
+                color={COLORS.primary}
+              />
+            ) : logsError ? (
+              <Text style={styles.empty}>{logsError.message}</Text>
+            ) : history.length === 0 ? (
+              <Text style={styles.empty}>
+                Nothing logged yet. Pick an activity above to earn your first
+                Eco Points!
+              </Text>
+            ) : (
+              history.map((item, i) => (
+                <React.Fragment key={item.id}>
+                  <HistoryRow item={item} />
+                  {i < history.length - 1 ? (
+                    <View style={styles.logDivider} />
+                  ) : null}
+                </React.Fragment>
+              ))
+            )}
+          </Card>
+        </Section>
+      </SkyScreen>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
-
-      {/* ── PREP TIPS SHEET ── */}
       <PrepSheet
         visible={sheetVisible}
         item={sheetItem}
         aqiLevel={liveLevel}
-        onClose={closeSheet}
+        onClose={() => setSheetVisible(false)}
       />
-    </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: T.surface,
+  hero: { gap: 20 },
+  copy: { gap: 4 },
+  title: {
+    fontFamily: FONTS.display,
+    fontSize: 36,
+    lineHeight: 42,
+    letterSpacing: -0.8,
+    color: COLORS.onPrimary,
   },
-
-  // Header
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    backgroundColor: T.surface,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: T.border,
-  },
-  headerTitle: {
-    fontWeight: "700",
-    fontSize: 22,
-    color: "#16a34a",
-    letterSpacing: -0.4,
-  },
-  timeBadge: {
-    backgroundColor: T.border,
-    borderRadius: 99,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  timeBadgeText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: T.muted,
-  },
-
-  scroll: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-
-  // AQI Hero
-  hero: {
-    borderRadius: T.radius,
-    padding: 24,
-    marginBottom: 16,
-  },
-  heroLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 1.5,
-    color: "rgba(255,255,255,0.6)",
-    marginBottom: 6,
-  },
-  heroRow: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-    marginBottom: 10,
-  },
-  heroNumber: {
-    fontSize: 60,
-    fontWeight: "800",
-    color: "#fff",
-    lineHeight: 64,
-  },
-  heroStatus: {
-    fontSize: 22,
-    fontWeight: "500",
-    color: "rgba(255,255,255,0.85)",
-    marginBottom: 6,
-  },
-  heroDesc: {
-    fontSize: 13,
-    color: "rgba(255,255,255,0.72)",
-    lineHeight: 20,
-    marginBottom: 16,
-    maxWidth: 260,
-  },
-  aqiDots: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  aqiDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 99,
-    backgroundColor: "rgba(255,255,255,0.2)",
+  subtitle: { fontFamily: FONTS.body, fontSize: 16, lineHeight: 24 },
+  picker: { gap: 8 },
+  levels: { flexDirection: "row", gap: 8 },
+  level: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
   },
-  aqiDotActive: {
-    backgroundColor: "rgba(255,255,255,0.5)",
-  },
-  aqiDotLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#fff",
-  },
-  aqiHint: {
-    fontSize: 10,
-    color: "rgba(255,255,255,0.45)",
-    marginTop: 6,
-  },
-
-  // Primary card
-  primaryCard: {
-    backgroundColor: T.card,
-    borderRadius: T.radius,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
-    marginBottom: 4,
-  },
-  primaryImage: {
-    width: "100%",
-    height: 180,
-    resizeMode: "cover",
-  },
-  primaryBody: {
-    padding: 18,
-  },
-  primaryTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: T.text,
-    letterSpacing: -0.4,
-    marginBottom: 4,
-  },
-  primarySubtitle: {
-    fontSize: 13,
-    color: T.muted,
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  primaryFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  seeTipsBtn: {
-    backgroundColor: T.green,
-    borderRadius: 99,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  seeTipsBtnText: {
-    color: "#fff",
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  // Secondary cards
-  secondaryGrid: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 4,
-  },
-  secondaryCardWrap: {
-    flex: 1,
-  },
-  secondaryCard: {
-    backgroundColor: T.card,
-    borderRadius: T.radius,
-    padding: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-    gap: 6,
-  },
-  secIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 2,
-  },
-  secIconEmoji: {
-    fontSize: 20,
-  },
-  secAlert: {
-    fontSize: 9,
-    fontWeight: "700",
-    letterSpacing: 0.8,
-    color: T.muted,
-    textTransform: "uppercase",
-  },
-  secTitle: {
+  levelText: {
+    fontFamily: FONTS.semiBold,
     fontSize: 14,
-    fontWeight: "600",
-    color: T.text,
+    lineHeight: 20,
+    color: COLORS.onPrimary,
+  },
+  hint: { flexDirection: "row", alignItems: "center", gap: 6 },
+  hintText: { fontFamily: FONTS.body, fontSize: 13, lineHeight: 18 },
+  backToLive: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 13,
     lineHeight: 18,
-  },
-  secPoints: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: T.muted,
-    marginTop: 2,
+    color: COLORS.onPrimary,
   },
 
-  // History
-  historyCard: {
-    backgroundColor: T.card,
-    borderRadius: T.radius,
-    overflow: "hidden",
-    shadowColor: "#000",
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+  stats: { flexDirection: "row", alignItems: "center", paddingVertical: 16 },
+  stat: { flex: 1, alignItems: "center", gap: 2 },
+  statValue: {
+    fontFamily: FONTS.heading,
+    fontSize: 22,
+    lineHeight: 28,
+    color: COLORS.onSurface,
   },
-  historyRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+  statLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.onSurfaceMuted,
   },
-  historyEmoji: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: T.surface,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  historyInfo: {
-    flex: 1,
-  },
-  historyTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: T.text,
-  },
-  historyDate: {
-    fontSize: 11,
-    color: T.muted,
-    marginTop: 2,
-  },
-  historyRight: {
-    alignItems: "flex-end",
-    gap: 4,
-  },
-  aqiTag: {
-    borderRadius: 99,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-  },
-  aqiTagText: {
-    fontSize: 10,
-    fontWeight: "600",
-  },
-  historyPoints: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: T.green,
-  },
-  historyDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: T.border,
-    marginLeft: 72,
-  },
-  historyEmpty: {
+  statDivider: { width: 1, height: 36, backgroundColor: COLORS.border },
+
+  tiles: { flexDirection: "row", gap: 12 },
+
+  spinner: { padding: 24 },
+  empty: {
     padding: 20,
     textAlign: "center",
-    color: T.muted,
+    fontFamily: FONTS.body,
     fontSize: 13,
     lineHeight: 19,
+    color: COLORS.onSurfaceMuted,
   },
-
-  headerLeft: {
+  logRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginLeft: 16,
-    gap: 6,
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
-  headerRight: { marginRight: 16 },
+  logIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.surface,
+  },
+  logText: { flex: 1, gap: 2 },
+  logTitle: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.onSurface,
+  },
+  logDate: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.onSurfaceMuted,
+  },
+  logRight: { alignItems: "flex-end", gap: 4 },
+  logTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 },
+  logTagText: { fontFamily: FONTS.semiBold, fontSize: 11, lineHeight: 14 },
+  logPoints: {
+    fontFamily: FONTS.heading,
+    fontSize: 13,
+    lineHeight: 18,
+    color: COLORS.primary,
+  },
+  logDivider: { height: 1, marginLeft: 72, backgroundColor: COLORS.border },
 });

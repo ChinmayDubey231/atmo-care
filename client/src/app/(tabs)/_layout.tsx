@@ -3,9 +3,8 @@ import { Redirect, Tabs } from "expo-router";
 import { MaterialIcons } from "@expo/vector-icons";
 import { ColorValue, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { COLORS, FONTS } from "@/constants/theme";
 import { useAccountSync } from "@/hooks/useAccountSync";
-
-const BRAND_COLOR = "#006944";
 
 /** Rendered only once signed in, so its API calls are authenticated. */
 const AccountSync = () => {
@@ -16,25 +15,23 @@ const AccountSync = () => {
 const TabIcon = ({
   name,
   color,
-  size,
   focused,
 }: {
   name: React.ComponentProps<typeof MaterialIcons>["name"];
   color: ColorValue;
-  size: number;
   focused: boolean;
 }) => (
   <View
     style={{
       width: 64,
-      height: 36,
+      height: 32,
       borderRadius: 16,
-      backgroundColor: focused ? "rgba(0, 105, 68, 0.12)" : "transparent",
+      backgroundColor: focused ? COLORS.primarySoft : "transparent",
       alignItems: "center",
       justifyContent: "center",
     }}
   >
-    <MaterialIcons name={name} size={size} color={color} />
+    <MaterialIcons name={name} size={24} color={color} />
   </View>
 );
 
@@ -50,26 +47,21 @@ const TabsLayout = () => {
     <AccountSync />
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: BRAND_COLOR,
-        tabBarInactiveTintColor: "rgba(43, 48, 47, 0.4)",
+        headerShown: false,
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.placeholder,
         tabBarStyle: {
-          backgroundColor: "rgba(255, 255, 255, 0.92)",
-          borderTopWidth: 0,
+          backgroundColor: COLORS.card,
+          borderTopWidth: 1,
+          borderTopColor: COLORS.border,
           elevation: 0,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -4 },
-          shadowOpacity: 0.07,
-          shadowRadius: 20,
-          height: 66 + insets.bottom,
+          height: 62 + insets.bottom,
           paddingBottom: insets.bottom || 8,
           paddingTop: 8,
-          borderTopLeftRadius: 28,
-          borderTopRightRadius: 28,
         },
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "700",
-          letterSpacing: 0.5,
+          fontFamily: FONTS.semiBold,
+          fontSize: 11,
           marginTop: 2,
         },
       }}
@@ -78,8 +70,8 @@ const TabsLayout = () => {
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon name="home" color={color} size={size} focused={focused} />
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="home" color={color} focused={focused} />
           ),
         }}
       />
@@ -87,13 +79,8 @@ const TabsLayout = () => {
         name="activities"
         options={{
           title: "Activities",
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon
-              name="bar-chart"
-              color={color}
-              size={size}
-              focused={focused}
-            />
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="directions-run" color={color} focused={focused} />
           ),
         }}
       />
@@ -101,14 +88,8 @@ const TabsLayout = () => {
         name="setting"
         options={{
           title: "Settings",
-          headerShown: true,
-          tabBarIcon: ({ color, size, focused }) => (
-            <TabIcon
-              name="settings"
-              color={color}
-              size={size}
-              focused={focused}
-            />
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name="settings" color={color} focused={focused} />
           ),
         }}
       />

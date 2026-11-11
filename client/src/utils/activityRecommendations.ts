@@ -1,5 +1,5 @@
-import { T } from "@/constants/theme";
-import { AqiMeta, DailyRecommendations } from "@/types/activities_type";
+import type { MaterialCommunityIcons } from "@expo/vector-icons";
+import { DailyRecommendations } from "@/types/activities_type";
 
 export function getRecommendedActivities(
   aqi: number | null,
@@ -53,7 +53,7 @@ export function getRecommendedActivities(
           title: "Organize Space",
           alert: "PRODUCTIVE",
           icon: "archive-outline",
-          color: "#ca8a04",
+          color: "#a16207",
           points: 30,
           prepTips: [
             "Use a damp cloth to avoid kicking up dust",
@@ -94,7 +94,7 @@ export function getRecommendedActivities(
           title: "Meal Prep",
           alert: "HEALTHY",
           icon: "pot-steam-outline",
-          color: "#ea580c",
+          color: "#c2410c",
           points: 40,
           prepTips: [
             "Use the exhaust fan if cooking with oil",
@@ -183,7 +183,7 @@ export function getRecommendedActivities(
         title: "Outdoor Stretch",
         alert: "MODERATE UV",
         icon: "yoga",
-        color: "#ca8a04",
+        color: "#a16207",
         points: 40,
         prepTips: [
           "Find a flat grassy patch",
@@ -290,70 +290,31 @@ export function formatLogDate(iso: string, now: Date = new Date()): string {
   return `${d.toLocaleDateString([], { month: "short", day: "numeric" })}, ${time}`;
 }
 
-/** Label and colour for the AQI tag on an activity-log row */
-export function aqiTag(level: number | null): { label: string; color: string } | null {
-  if (level == null) return null;
-  if (level <= 2) return { label: "Good", color: T.green };
-  if (level === 3) return { label: "Moderate", color: T.amber };
-  return { label: level === 4 ? "Unhealthy" : "Hazardous", color: T.red };
-}
+type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
-const ICON_MAP: Record<string, string> = {
-  "book-open-page-variant": "📖",
-  "archive-outline": "🗂️",
-  leaf: "🌿",
-  "pot-steam-outline": "🍲",
-  meditation: "🧘",
-  broom: "🧹",
-  bike: "🚴",
-  yoga: "🤸",
-  "water-outline": "💧",
-  "tree-outline": "🌳",
-  "weather-night": "🌌",
-  "silverware-fork-knife": "🍽️",
+// Keys match the server's activity catalog (server/src/catalog.ts)
+const LOG_ICONS: Record<string, IconName> = {
+  water: "water",
+  sun: "white-balance-sunny",
+  clean: "broom",
+  "indoor-yoga": "yoga",
+  "read-book": "book-open-page-variant",
+  "organize-space": "archive-outline",
+  "home-hiit": "dumbbell",
+  "plant-care": "leaf",
+  "meal-prep": "pot-steam-outline",
+  "movie-marathon": "movie-open-outline",
+  meditation: "meditation",
+  "light-cleaning": "broom",
+  "morning-jog": "run",
+  cycling: "bike",
+  "outdoor-stretch": "yoga",
+  "park-walk": "walk",
+  hydrate: "water-outline",
+  "shaded-reading": "tree-outline",
+  "sunset-stroll": "weather-sunset",
+  "star-gazing": "weather-night",
+  "patio-dinner": "silverware-fork-knife",
 };
 
-export const emojiFor = (name?: string): string => ICON_MAP[name ?? ""] ?? "✨";
-
-export const AQI_META: AqiMeta[] = [
-  {
-    level: 1,
-    num: 24,
-    label: "Good",
-    desc: "Perfect conditions. Great day for outdoor activities.",
-    gradStart: "#1a6b4a",
-    gradEnd: "#2d9968",
-  },
-  {
-    level: 2,
-    num: 65,
-    label: "Good",
-    desc: "Satisfactory air quality. Outdoor activities encouraged.",
-    gradStart: "#1a6b4a",
-    gradEnd: "#2d9968",
-  },
-  {
-    level: 3,
-    num: 105,
-    label: "Moderate",
-    desc: "Sensitive groups should limit prolonged outdoor exertion.",
-    gradStart: "#92400e",
-    gradEnd: "#ca8a04",
-  },
-  {
-    level: 4,
-    num: 155,
-    label: "Unhealthy",
-    desc: "Consider staying indoors. Air may irritate respiratory systems.",
-    gradStart: "#7f1d1d",
-    gradEnd: "#b91c1c",
-  },
-  {
-    level: 5,
-    num: 210,
-    label: "Hazardous",
-    desc: "Avoid all outdoor activity. Keep windows shut.",
-    gradStart: "#4c0519",
-    gradEnd: "#9f1239",
-  },
-];
+export const iconForLog = (key: string): IconName => LOG_ICONS[key] ?? "leaf";

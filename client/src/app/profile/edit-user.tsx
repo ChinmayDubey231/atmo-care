@@ -1,20 +1,26 @@
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Pressable,
-} from "react-native";
-import React, { useState } from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useUser } from "@clerk/expo";
+import { MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { getUserName } from "@/utils/userUtils";
-import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+
+import { SkyScreen } from "@/components/Sky";
+import {
+  Field,
+  FieldGroup,
+  FormError,
+  PrimaryButton,
+} from "@/components/ui";
+import { BRAND_SKY, COLORS, FONTS, withAlpha } from "@/constants/theme";
+import { getUserName } from "@/utils/userUtils";
 
 const EditUser = () => {
   const { user } = useUser();
@@ -22,17 +28,26 @@ const EditUser = () => {
 
   const [firstName, setFirstName] = useState(user?.firstName ?? "");
   const [lastName, setLastName] = useState(user?.lastName ?? "");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSave = async () => {
+    setSaving(true);
+    setError(null);
     try {
       await user?.update({ firstName, lastName });
       router.back();
     } catch (e) {
       console.error("Failed to update user:", e);
+      setError("Couldn't save your changes. Please try again.");
+    } finally {
+      setSaving(false);
     }
   };
 
   const uploadImage = async () => {
+    setError(null);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
@@ -49,256 +64,178 @@ const EditUser = () => {
       // Construct the base64 data string
       const base64 = `data:${asset.mimeType};base64,${asset.base64}`;
 
+      setUploading(true);
       // Pass the base64 string directly to Clerk
       await user?.setProfileImage({
         file: base64,
       });
-
-      // Optional: add a success alert or toast here
     } catch (e) {
       console.error("Failed to upload image:", e);
-      // Helpful to see the actual error message in the UI during dev
-      alert("Upload failed. Please try again.");
+      setError("Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="chevron-back" size={20} color="#2b302f" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Profile</Text>
-          <View style={{ width: 36 }} />
-        </View>
-
-        {/* Avatar */}
-        <View style={styles.avatarSection}>
-          <View style={styles.avatarWrapper}>
-            {user?.hasImage ? (
-              <Image
-                source={{ uri: user.imageUrl }}
-                style={styles.avatar}
-                contentFit="cover"
-              />
-            ) : (
-              <View style={styles.avatarFallback}>
-                <Text style={styles.avatarInitials}>
-                  {getUserName(user).charAt(0).toUpperCase()}
-                </Text>
-              </View>
-            )}
-            <TouchableOpacity
-              style={styles.avatarEditBtn}
-              onPress={uploadImage}
+    <SkyScreen
+      heroHeight={300}
+      skyScale={0.7}
+      liftForKeyboard
+      sheetStyle={styles.sheet}
+      hero={
+        <>
+          <View style={styles.top}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={8}
+              onPress={() => router.back()}
+              style={styles.back}
             >
-              <Ionicons name="camera" size={14} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.avatarName}>{getUserName(user)}</Text>
-        </View>
-
-        {/* Form */}
-        <View style={styles.form}>
-          <Text style={styles.sectionLabel}>Personal Info</Text>
-
-          <View style={styles.card}>
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>First Name</Text>
-              <TextInput
-                style={styles.input}
-                value={firstName}
-                onChangeText={setFirstName}
-                placeholder="First name"
-                placeholderTextColor="#aaaeac"
+              <MaterialIcons
+                name="arrow-back"
+                size={20}
+                color={BRAND_SKY.mist}
               />
-            </View>
-            <View style={styles.divider} />
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Last Name</Text>
-              <TextInput
-                style={styles.input}
-                value={lastName}
-                onChangeText={setLastName}
-                placeholder="Last name"
-                placeholderTextColor="#aaaeac"
-              />
-            </View>
+            </Pressable>
+            <Text accessibilityRole="header" style={styles.title}>
+              Edit profile
+            </Text>
           </View>
 
-          <Text style={styles.sectionLabel}>Account</Text>
-
-          <View style={styles.card}>
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Email</Text>
-              <Text style={styles.fieldValue}>
-                {user?.emailAddresses?.[0]?.emailAddress}
-              </Text>
+          <View style={styles.identity}>
+            <View style={styles.avatarWrap}>
+              {user?.hasImage ? (
+                <Image
+                  source={{ uri: user.imageUrl }}
+                  style={styles.avatar}
+                  contentFit="cover"
+                />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Text style={styles.initial}>
+                    {getUserName(user).charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Change profile photo"
+                accessibilityState={{ busy: uploading }}
+                disabled={uploading}
+                hitSlop={8}
+                onPress={uploadImage}
+                style={styles.camera}
+              >
+                {uploading ? (
+                  <ActivityIndicator size="small" color={COLORS.onPrimary} />
+                ) : (
+                  <MaterialIcons
+                    name="photo-camera"
+                    size={16}
+                    color={COLORS.onPrimary}
+                  />
+                )}
+              </Pressable>
             </View>
+            <Text style={styles.name} numberOfLines={1}>
+              {getUserName(user)}
+            </Text>
           </View>
-        </View>
+        </>
+      }
+    >
+      <FieldGroup>
+        <Field
+          label="First name"
+          value={firstName}
+          onChangeText={setFirstName}
+          placeholder="First name"
+          autoComplete="given-name"
+          textContentType="givenName"
+        />
+        <Field
+          label="Last name"
+          value={lastName}
+          onChangeText={setLastName}
+          placeholder="Last name"
+          autoComplete="family-name"
+          textContentType="familyName"
+        />
+        <Field
+          label="Email"
+          value={user?.emailAddresses?.[0]?.emailAddress ?? ""}
+          editable={false}
+        />
+      </FieldGroup>
 
-        {/* Save Button */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.saveBtn,
-            pressed && styles.saveBtnPressed,
-          ]}
-          onPress={handleSave}
-        >
-          <Ionicons name="checkmark" size={18} color="#fff" />
-          <Text style={styles.saveBtnText}>Save Changes</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
+      <FormError message={error} />
+
+      <PrimaryButton
+        label="Save changes"
+        loading={saving}
+        onPress={handleSave}
+      />
+    </SkyScreen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f3f7f5" },
-  scroll: { padding: 16, paddingBottom: 40 },
-
-  // Header
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 24,
-  },
-  backBtn: {
+  sheet: { gap: 20 },
+  top: { flexDirection: "row", alignItems: "center", gap: 10 },
+  back: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#ffffff",
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: withAlpha(BRAND_SKY.mist, 0.28),
   },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: "#2b302f",
-    letterSpacing: -0.3,
+  title: {
+    fontFamily: FONTS.heading,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.2,
+    color: COLORS.onPrimary,
   },
-
-  // Avatar
-  avatarSection: { alignItems: "center", marginBottom: 32 },
-  avatarWrapper: { position: "relative", marginBottom: 12 },
+  identity: { alignItems: "center", gap: 10, marginTop: 16 },
+  avatarWrap: { width: 96, height: 96 },
   avatar: {
     width: 96,
     height: 96,
     borderRadius: 48,
     borderWidth: 3,
-    borderColor: "#edf2f0",
+    borderColor: withAlpha(BRAND_SKY.mist, 0.5),
+    backgroundColor: COLORS.primarySoft,
   },
-  avatarFallback: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "#6decae",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#edf2f0",
+  avatarFallback: { alignItems: "center", justifyContent: "center" },
+  initial: {
+    fontFamily: FONTS.heading,
+    fontSize: 36,
+    lineHeight: 44,
+    color: COLORS.primary,
   },
-  avatarInitials: { fontSize: 32, fontWeight: "800", color: "#005436" },
-  avatarEditBtn: {
+  camera: {
     position: "absolute",
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#16a34a",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#ffffff",
-  },
-  avatarName: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#2b302f",
-    letterSpacing: -0.3,
-  },
-
-  // Form
-  form: { gap: 8 },
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    color: "#737876",
-    marginTop: 16,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  card: {
+    right: -2,
+    bottom: -2,
+    width: 32,
+    height: 32,
     borderRadius: 16,
-    backgroundColor: "#ffffff",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
-    overflow: "hidden",
-  },
-  fieldRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
-  },
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "#edf2f0",
-    marginHorizontal: 16,
-  },
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#585c5b",
-    width: 80,
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#2b302f",
-  },
-  fieldValue: {
-    flex: 1,
-    fontSize: 14,
-    color: "#aaaeac",
-  },
-
-  // Save
-  saveBtn: {
-    flexDirection: "row",
+    borderWidth: 2,
+    borderColor: COLORS.card,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    marginTop: 32,
-    paddingVertical: 16,
-    borderRadius: 50,
-    backgroundColor: "#16a34a",
+    backgroundColor: COLORS.primary,
   },
-  saveBtnPressed: { backgroundColor: "#15803d" },
-  saveBtnText: { fontSize: 15, fontWeight: "700", color: "#ffffff" },
+  name: {
+    fontFamily: FONTS.heading,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.2,
+    color: COLORS.onPrimary,
+  },
 });
 
 export default EditUser;

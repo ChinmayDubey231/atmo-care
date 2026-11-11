@@ -1,509 +1,305 @@
-import {
-  useState,
-  useLayoutEffect,
-  useCallback,
-  useRef,
-} from "react";
-import {
-  Text,
-  View,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Pressable,
-  Modal,
-  Animated,
-  Dimensions,
-} from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useNavigation } from "expo-router";
-import { useLogActivity, useStats } from "@/api/queries";
-import type { LogResult } from "@/api/types";
-import { useAirQuality } from "@/hooks/useAirQuality";
-import { AQIHeroCard } from "../components/AQIHeroCard";
-import { DailyActivitiesBento } from "../components/DailyActivitiesBento";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import React, { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+
+import { useMe, useStats } from "@/api/queries";
+import { ActivityPhotoCard, ActivityTile } from "@/components/ActivityCards";
+import { AirCard } from "@/components/AirCard";
+import { CareSheet } from "@/components/CareSheet";
+import { PrepSheet } from "@/components/PrepSheet";
+import { SkyScreen } from "@/components/Sky";
+import { IconBubble, Section } from "@/components/ui";
+import { getAirLevel } from "@/constants/air";
 import {
   INTERACTION_CONFIG,
-  InteractionType,
+  type InteractionType,
 } from "@/constants/interactionConfig";
-import { InteractionsRow } from "@/app/components/InteractionsRow";
-// ── Colors ───────────────────────────────────────────────────────────────────
-const COLORS = {
-  primary: "#006944",
-  tertiary: "#006093",
-  secondary: "#006a35",
-  error: "#b31b25",
-  surfaceLowest: "#ffffff",
-  surfaceHighest: "#d7dedc",
-  onSurface: "#2b302f",
-};
+import { BRAND_SKY, COLORS, FONTS, withAlpha } from "@/constants/theme";
+import { useAirQuality } from "@/hooks/useAirQuality";
+import type { ActivityDetails } from "@/types/activities_type";
+import { getRecommendedActivities } from "@/utils/activityRecommendations";
+import { displayUnits } from "@/utils/measurementUnitsConfig";
 
-const SCREEN_HEIGHT = Dimensions.get("window").height;
+const CARE_TYPES: InteractionType[] = ["water", "sun", "clean"];
 
-export default function App() {
-  const navigation = useNavigation();
-  const { stats, errorMsg } = useAirQuality();
+export default function HomeScreen() {
+  const { stats: air, errorMsg, refetch } = useAirQuality();
   const { data: myStats } = useStats();
-  const logCare = useLogActivity();
-  const [activeInteraction, setActiveInteraction] =
-    useState<InteractionType | null>(null);
-  const [lastResult, setLastResult] = useState<LogResult | null>(null);
-  const justLogged = lastResult != null;
-  const [modalVisible, setModalVisible] = useState(false);
+  const { data: me } = useMe();
 
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  const backdropAnim = useRef(new Animated.Value(0)).current;
+  const [careType, setCareType] = useState<InteractionType>("water");
+  const [careVisible, setCareVisible] = useState(false);
+  const [activity, setActivity] = useState<ActivityDetails | null>(null);
+  const [activityVisible, setActivityVisible] = useState(false);
 
-  // ── Header ──────────────────────────────────────────────────────────────────
-  const HeaderLeft = useCallback(
-    () => (
-      <View style={styles.headerLeft}>
-        <Ionicons name="location" size={22} color="#16a34a" />
-        <Text style={styles.headerTitle}>
-          {stats?.city ? `${stats.city}, ${stats.region}` : "Loading..."}
-        </Text>
-      </View>
-    ),
-    [stats],
-  );
+  const aqi = air?.aqi ?? null;
+  const level = getAirLevel(aqi);
+  const hasReading = aqi != null && !errorMsg;
+  const palette = hasReading ? level.sky : BRAND_SKY;
+  const recommended = getRecommendedActivities(aqi, new Date().getHours());
+  const streak = myStats?.streak ?? 0;
 
-  const HeaderRight = useCallback(
-    () => (
-      <View style={styles.headerRight}>
-        <Ionicons name="leaf" size={22} color="#16a34a" />
-      </View>
-    ),
-    [],
-  );
+  const place = air
+    ? [air.city, air.region].filter(Boolean).join(", ")
+    : errorMsg
+      ? "Location unavailable"
+      : "Finding your location…";
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerTitle: "",
-      headerShown: true,
-      headerLeft: HeaderLeft,
-      headerRight: HeaderRight,
-      headerStyle: {
-        backgroundColor: "#f3f7f5",
-        borderBottomWidth: 1,
-        borderBottomColor: "#d7dedc",
-      },
-      headerShadowVisible: true,
-    });
-  }, [navigation, HeaderLeft, HeaderRight]);
+  const openCare = (type: InteractionType) => {
+    setCareType(type);
+    setCareVisible(true);
+  };
 
-  // ── Sheet animations ─────────────────────────────────────────────────────────
-  function openSheet(type: InteractionType) {
-    setActiveInteraction(type);
-    setLastResult(null);
-    logCare.reset();
-    setModalVisible(true);
-    Animated.parallel([
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 65,
-        friction: 11,
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdropAnim, {
-        toValue: 1,
-        duration: 250,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }
-
-  function closeSheet() {
-    Animated.parallel([
-      Animated.timing(slideAnim, {
-        toValue: SCREEN_HEIGHT,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-      Animated.timing(backdropAnim, {
-        toValue: 0,
-        duration: 220,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setModalVisible(false);
-      setActiveInteraction(null);
-      setLastResult(null);
-    });
-  }
-
-  // ── Log helpers ──────────────────────────────────────────────────────────────
-  function handleLogAction() {
-    if (!activeInteraction) return;
-    logCare.mutate(
-      { kind: "care", key: activeInteraction, aqiLevel: stats?.aqi ?? null },
-      { onSuccess: setLastResult },
-    );
-  }
-
-  function getLastLogged(type: InteractionType): string {
-    const lastAt = myStats?.care[type].lastAt;
-    if (!lastAt) return "Never logged";
-    const diffMs = Date.now() - new Date(lastAt).getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    const diffHrs = Math.floor(diffMins / 60);
-    if (diffHrs < 24) return `${diffHrs}h ago`;
-    return `${Math.floor(diffHrs / 24)}d ago`;
-  }
-
-  /** Times logged today */
-  function getStreak(type: InteractionType): number {
-    return myStats?.care[type].todayCount ?? 0;
-  }
-
-  const activeConfig = activeInteraction
-    ? INTERACTION_CONFIG[activeInteraction]
-    : null;
+  const openActivity = (item: ActivityDetails) => {
+    setActivity(item);
+    setActivityVisible(true);
+  };
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: "#f3f7f5" }}
-      edges={["left", "right"]}
-    >
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {errorMsg ? (
-          <View style={{ padding: 24 }}>
-            <Text style={{ color: COLORS.error, textAlign: "center" }}>
-              {errorMsg}
-            </Text>
-          </View>
-        ) : (
-          <AQIHeroCard
-            aqi={stats?.aqi ?? null}
-            pm25={stats?.pm25 ?? null}
-            pm10={stats?.pm10 ?? null}
-          />
-        )}
-
-        {/* ── Interactions ───────────────────────────────────────────────────── */}
-        <InteractionsRow openSheet={openSheet} getStreak={getStreak} />
-
-        {/* ── Daily Activities ───────────────────────────────────────────────── */}
-        <DailyActivitiesBento aqi={stats?.aqi ?? null} />
-      </ScrollView>
-
-      {/* ── Animated Modal Sheet ─────────────────────────────────────────────── */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-        onRequestClose={closeSheet}
-      >
-        {/* Dimmed backdrop */}
-        <Animated.View style={[styles.backdrop, { opacity: backdropAnim }]}>
-          <Pressable style={StyleSheet.absoluteFill} onPress={closeSheet} />
-        </Animated.View>
-
-        {/* Sliding sheet panel */}
-        <Animated.View
-          style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
-        >
-          <View style={styles.sheetHandle} />
-
-          {activeConfig && activeInteraction && (
-            <View style={styles.sheetContent}>
-              {/* Title row */}
-              <View style={styles.sheetTitleRow}>
-                <Text style={styles.sheetEmoji}>{activeConfig.emoji}</Text>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.sheetTitle}>
-                      {activeConfig.sheetTitle}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.sheetStreak,
-                        { color: activeConfig.color },
-                      ]}
-                    >
-                      {getStreak(activeInteraction) > 0
-                        ? `${getStreak(activeInteraction)}× logged today`
-                        : "Not logged yet today"}
-                    </Text>
-                    {/* Last logged — updates live since modal re-renders on open */}
-                    <Text style={styles.sheetLastLogged}>
-                      Last: {getLastLogged(activeInteraction)}
-                    </Text>
-                  </View>
-                </View>
-                <Pressable onPress={closeSheet} style={styles.closeBtn}>
-                  <Ionicons
-                    name="close"
-                    size={20}
-                    color={COLORS.onSurface + "80"}
-                  />
-                </Pressable>
-              </View>
-
-              {/* AQI-driven advice */}
-              <View
-                style={[
-                  styles.adviceBox,
-                  {
-                    backgroundColor: activeConfig.color + "10",
-                    borderColor: activeConfig.color + "25",
-                  },
-                ]}
-              >
+    <>
+      <SkyScreen
+        tabbed
+        palette={palette}
+        heroHeight={360}
+        skyScale={0.86}
+        hero={
+          <View style={styles.hero}>
+            <View style={styles.heroTop}>
+              <View style={styles.place}>
                 <MaterialCommunityIcons
-                  name="information-outline"
-                  size={16}
-                  color={activeConfig.color}
-                  style={{ marginTop: 1 }}
+                  name="map-marker"
+                  size={18}
+                  color={palette.mist}
                 />
-                <Text
-                  style={[
-                    styles.adviceText,
-                    { color: activeConfig.color + "cc" },
-                  ]}
-                >
-                  {activeConfig.getDescription(stats?.aqi ?? null)}
+                <Text style={styles.placeText} numberOfLines={1}>
+                  {place}
                 </Text>
               </View>
-
-              {/* Action / confirmation */}
-              {justLogged ? (
+              {streak > 0 ? (
                 <View
+                  accessible
+                  accessibilityLabel={`${streak} day streak`}
                   style={[
-                    styles.loggedBadge,
-                    {
-                      backgroundColor: activeConfig.color + "15",
-                      borderColor: activeConfig.color + "30",
-                    },
+                    styles.streak,
+                    { backgroundColor: withAlpha(palette.mist, 0.2) },
                   ]}
                 >
-                  <Ionicons
-                    name="checkmark-circle"
-                    size={20}
-                    color={activeConfig.color}
+                  <MaterialCommunityIcons
+                    name="fire"
+                    size={14}
+                    color={palette.mist}
                   />
-                  <Text
-                    style={[styles.loggedText, { color: activeConfig.color }]}
-                  >
-                    {lastResult?.alreadyEarnedToday
-                      ? "Logged! (Today's points already earned)"
-                      : `Logged successfully! +${lastResult?.pointsAwarded} pts`}
-                  </Text>
+                  <Text style={styles.streakText}>{streak}</Text>
                 </View>
-              ) : (
-                <>
-                  {logCare.error ? (
-                    <Text style={styles.errorText}>
-                      {logCare.error.message}
-                    </Text>
-                  ) : null}
-                  <TouchableOpacity
-                    style={[
-                      styles.actionBtn,
-                      { backgroundColor: activeConfig.color },
-                      logCare.isPending && { opacity: 0.6 },
-                    ]}
-                    onPress={handleLogAction}
-                    disabled={logCare.isPending}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.actionBtnText}>
-                      {logCare.isPending ? "Logging…" : activeConfig.actionLabel}
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
+              ) : null}
             </View>
-          )}
-        </Animated.View>
-      </Modal>
-    </SafeAreaView>
+
+            <View style={styles.copy}>
+              <Text style={[styles.eyebrow, { color: palette.mist }]}>
+                Air right now
+              </Text>
+              {hasReading ? (
+                <Text
+                  accessibilityRole="header"
+                  style={styles.airLabel}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
+                  {level.label}
+                </Text>
+              ) : (
+                <Text accessibilityRole="header" style={styles.pendingLabel}>
+                  {errorMsg ? "No reading yet" : "Reading the air…"}
+                </Text>
+              )}
+              <Text style={[styles.summary, { color: palette.mist }]}>
+                {errorMsg ?? (hasReading ? level.summary : "")}
+              </Text>
+              {errorMsg ? (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => refetch()}
+                  style={styles.retry}
+                >
+                  <Text style={styles.retryText}>Try again</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        }
+      >
+        {hasReading ? (
+          <AirCard
+            air={level}
+            pm25={air?.pm25 ?? null}
+            pm10={air?.pm10 ?? null}
+            units={displayUnits(me?.settings.units)}
+          />
+        ) : null}
+
+        <Section title="Plant care">
+          <View style={styles.row}>
+            {CARE_TYPES.map((type) => {
+              const config = INTERACTION_CONFIG[type];
+              const count = myStats?.care[type].todayCount ?? 0;
+              return (
+                <Pressable
+                  key={type}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${config.label}, ${count} logged today`}
+                  onPress={() => openCare(type)}
+                  style={({ pressed }) => [
+                    styles.careTile,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <IconBubble size={44} tint={config.tint}>
+                    <MaterialCommunityIcons
+                      name={config.icon}
+                      size={24}
+                      color={config.color}
+                    />
+                  </IconBubble>
+                  <View style={styles.careText}>
+                    <Text style={styles.careLabel}>{config.label}</Text>
+                    <Text style={styles.careStatus}>
+                      {count > 0 ? `${count}× today` : "Not yet today"}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Section>
+
+        <Section title="Today's plan">
+          <ActivityPhotoCard
+            item={recommended.primary}
+            onPress={() => openActivity(recommended.primary)}
+          />
+          <View style={styles.row}>
+            <ActivityTile
+              item={recommended.secondary1}
+              onPress={() => openActivity(recommended.secondary1)}
+            />
+            <ActivityTile
+              item={recommended.secondary2}
+              onPress={() => openActivity(recommended.secondary2)}
+            />
+          </View>
+        </Section>
+      </SkyScreen>
+
+      <CareSheet
+        visible={careVisible}
+        type={careType}
+        aqi={aqi}
+        todayCount={myStats?.care[careType].todayCount ?? 0}
+        lastAt={myStats?.care[careType].lastAt}
+        onClose={() => setCareVisible(false)}
+      />
+      <PrepSheet
+        visible={activityVisible}
+        item={activity}
+        aqiLevel={aqi}
+        onClose={() => setActivityVisible(false)}
+      />
+    </>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  // Header
-  headerLeft: {
+  hero: { gap: 28 },
+  heroTop: {
     flexDirection: "row",
     alignItems: "center",
-    marginLeft: 16,
-    gap: 6,
-  },
-  headerTitle: {
-    fontSize: 19,
-    color: "#16a34a",
-    fontWeight: "800",
-    textTransform: "capitalize",
-    letterSpacing: 0.5,
-    marginLeft: 2,
-  },
-  headerRight: { marginRight: 16 },
-
-  // Sections
-  sectionContainer: {
-    paddingHorizontal: 16,
-    marginBottom: 24,
-    marginTop: 22,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: COLORS.onSurface,
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-
-  // Interaction cards
-  interactionsRow: {
-    flexDirection: "row",
+    justifyContent: "space-between",
     gap: 12,
   },
-  interactionCard: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceLowest,
-    alignItems: "center",
-    borderRadius: 16,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    borderWidth: 1.5,
-    borderColor: "transparent",
+  place: { flex: 1, flexDirection: "row", alignItems: "center", gap: 6 },
+  placeText: {
+    flexShrink: 1,
+    fontFamily: FONTS.semiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: COLORS.onPrimary,
   },
-  iconWrapper: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+  streak: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 8,
+    gap: 4,
+    paddingLeft: 10,
+    paddingRight: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
-  interactionLabel: {
+  streakText: {
+    fontFamily: FONTS.semiBold,
     fontSize: 13,
-    fontWeight: "700",
-    color: COLORS.onSurface,
-    marginBottom: 3,
+    lineHeight: 18,
+    color: COLORS.onPrimary,
   },
-  interactionMeta: {
-    fontSize: 10,
-    fontWeight: "500",
+  copy: { gap: 2 },
+  eyebrow: { fontFamily: FONTS.medium, fontSize: 15, lineHeight: 20 },
+  airLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 60,
+    lineHeight: 66,
+    letterSpacing: -1.5,
+    color: COLORS.onPrimary,
   },
-
-  // Backdrop
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0,0,0,0.4)",
-  },
-
-  // Sheet
-  sheet: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: 36,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 16,
-    elevation: 16,
-  },
-  sheetHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#d7dedc",
-    alignSelf: "center",
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  sheetContent: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    gap: 16,
-  },
-  sheetTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  sheetEmoji: {
+  pendingLabel: {
+    fontFamily: FONTS.display,
     fontSize: 36,
+    lineHeight: 42,
+    letterSpacing: -0.8,
+    color: COLORS.onPrimary,
   },
-  sheetTitle: {
-    fontSize: 18,
-    fontWeight: "800",
+  summary: {
+    maxWidth: 252,
+    fontFamily: FONTS.body,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  retry: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: BRAND_SKY.mist,
+  },
+  retryText: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 14,
+    lineHeight: 20,
+    color: BRAND_SKY.base,
+  },
+
+  row: { flexDirection: "row", gap: 10 },
+  pressed: { transform: [{ scale: 0.97 }] },
+  careTile: {
+    flex: 1,
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
+  },
+  careText: { alignItems: "center" },
+  careLabel: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 14,
+    lineHeight: 20,
     color: COLORS.onSurface,
   },
-  sheetStreak: {
+  careStatus: {
+    fontFamily: FONTS.body,
     fontSize: 12,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  closeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#f3f7f5",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  adviceBox: {
-    flexDirection: "row",
-    gap: 8,
-    padding: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: "flex-start",
-  },
-  adviceText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: "500",
-    lineHeight: 19,
-  },
-  actionBtn: {
-    borderRadius: 14,
-    paddingVertical: 15,
-    alignItems: "center",
-  },
-  actionBtnText: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#ffffff",
-    letterSpacing: 0.3,
-  },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 13,
-    textAlign: "center",
-    marginBottom: 10,
-  },
-  loggedBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderRadius: 14,
-    paddingVertical: 15,
-    borderWidth: 1,
-  },
-  loggedText: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  sheetLastLogged: {
-    fontSize: 11,
-    fontWeight: "500",
-    color: COLORS.onSurface + "50",
-    marginTop: 1,
+    lineHeight: 16,
+    color: COLORS.onSurfaceMuted,
   },
 });

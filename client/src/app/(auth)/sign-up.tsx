@@ -6,14 +6,16 @@ import type { TextInput } from "react-native";
 import {
   AuthFooter,
   AuthScreen,
+  LinkRow,
+  SocialSignIn,
+} from "@/components/AuthKit";
+import {
   Field,
   FieldGroup,
   FormError,
-  LinkRow,
   PrimaryButton,
-  SocialSignIn,
   TextLink,
-} from "../../components/AuthKit";
+} from "@/components/ui";
 
 export default function Page() {
   const { signUp, errors, fetchStatus } = useSignUp();

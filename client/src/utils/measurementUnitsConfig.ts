@@ -1,5 +1,9 @@
+import type { Units } from "@/api/types";
+
+export type DisplayUnits = "metric" | "us";
+
 export interface MeasurementOption {
-  value: string;
+  value: DisplayUnits;
   label: string;
   description: string;
 }
@@ -7,16 +11,22 @@ export interface MeasurementOption {
 export const measurements: MeasurementOption[] = [
   {
     value: "metric",
-    label: "Metric",
-    description: "µg/m³ — micrograms per cubic metre",
+    label: "µg/m³",
+    description: "Particle concentration, micrograms per cubic metre",
   },
   {
-    value: "imperial",
-    label: "Imperial",
-    description: "ppm — parts per million",
+    value: "us",
+    label: "US AQI",
+    description: "EPA index, 0 to 500+, estimated from current readings",
   },
-  { value: "us", label: "US standard", description: "AQI — Air Quality Index" },
 ];
 
-export const getMeasurementLabel = (value: string) =>
-  measurements.find((m) => m.value === value)?.label ?? value;
+/**
+ * How readings are shown. "imperial" used to be offered, but particles can't
+ * be measured in imperial units, so anyone who chose it sees µg/m³.
+ */
+export const displayUnits = (units: Units | null | undefined): DisplayUnits =>
+  units === "us" ? "us" : "metric";
+
+export const getMeasurementLabel = (units: Units | null | undefined) =>
+  measurements.find((m) => m.value === displayUnits(units))?.label ?? "µg/m³";

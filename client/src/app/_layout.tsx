@@ -1,10 +1,22 @@
 import { ClerkProvider, useAuth } from "@clerk/expo";
 import { tokenCache } from "@clerk/expo/token-cache";
 import {
+  BeVietnamPro_400Regular,
+  BeVietnamPro_500Medium,
+  BeVietnamPro_600SemiBold,
+  BeVietnamPro_700Bold,
+} from "@expo-google-fonts/be-vietnam-pro";
+import {
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from "@expo-google-fonts/plus-jakarta-sans";
+import {
   focusManager,
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
@@ -35,6 +47,16 @@ function ClearCacheOnUserChange() {
 }
 
 export default function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    "PlusJakartaSans-SemiBold": PlusJakartaSans_600SemiBold,
+    "PlusJakartaSans-Bold": PlusJakartaSans_700Bold,
+    "PlusJakartaSans-ExtraBold": PlusJakartaSans_800ExtraBold,
+    "BeVietnamPro-Regular": BeVietnamPro_400Regular,
+    "BeVietnamPro-Medium": BeVietnamPro_500Medium,
+    "BeVietnamPro-SemiBold": BeVietnamPro_600SemiBold,
+    "BeVietnamPro-Bold": BeVietnamPro_700Bold,
+  });
+
   // Refetch stale data (AQI, stats) when the app comes back to the foreground
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) =>
@@ -42,6 +64,9 @@ export default function RootLayout() {
     );
     return () => sub.remove();
   }, []);
+
+  // If a font fails to load, carry on with the system font
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

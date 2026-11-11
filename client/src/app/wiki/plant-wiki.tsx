@@ -1,33 +1,110 @@
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Pressable,
-} from "react-native";
-import React, { useState } from "react";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useUser } from "@clerk/expo";
-import { CATEGORIES, Plant, PLANTS } from "../../utils/plant-wikiConfig";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import PlantDetailModal from "../components/PlantDetailModal";
+import React, { useState } from "react";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
+
 import { useFavorites, useToggleFavorite } from "@/api/queries";
+import { PlantDetailSheet } from "@/components/PlantDetailSheet";
+import { SkyScreen } from "@/components/Sky";
+import { Section } from "@/components/ui";
+import { BRAND_SKY, COLORS, FONTS, withAlpha } from "@/constants/theme";
+import {
+  CATEGORIES,
+  type Plant,
+  plantImage,
+  PLANTS,
+} from "@/utils/plant-wikiConfig";
+
+const FEATURED = PLANTS.find((p) => p.key === "snakeplant");
+
+const SIDE_PADDING = 24;
+const COLUMN_GAP = 12;
+
+function PlantCard({
+  plant,
+  width,
+  favorite,
+  onOpen,
+  onToggleFavorite,
+}: {
+  plant: Plant;
+  width: number;
+  favorite: boolean;
+  onOpen: () => void;
+  onToggleFavorite: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={plant.name}
+      onPress={onOpen}
+      style={({ pressed }) => [
+        styles.card,
+        { width },
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={styles.cardImage}>
+        <Image
+          source={plantImage(plant.image)}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={200}
+        />
+        <View style={styles.cardBadge}>
+          <Text style={styles.cardBadgeText} numberOfLines={1}>
+            {plant.badge}
+          </Text>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            favorite
+              ? `Remove ${plant.name} from favorites`
+              : `Add ${plant.name} to favorites`
+          }
+          hitSlop={8}
+          onPress={onToggleFavorite}
+          style={styles.heart}
+        >
+          <MaterialCommunityIcons
+            name={favorite ? "heart" : "heart-outline"}
+            size={18}
+            color={favorite ? "#dc2626" : COLORS.onSurfaceMuted}
+          />
+        </Pressable>
+      </View>
+      <View style={styles.cardBody}>
+        <Text style={styles.cardName} numberOfLines={2}>
+          {plant.name}
+        </Text>
+        <Text style={styles.cardLevel}>{plant.level} care</Text>
+      </View>
+    </Pressable>
+  );
+}
 
 const PlantWikiScreen = () => {
   const router = useRouter();
-  const { user } = useUser();
-  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   const [activeCategory, setActiveCategory] = useState("all");
   const [search, setSearch] = useState("");
   const { data: favorites = new Set<string>() } = useFavorites();
   const { mutate: setFavorite } = useToggleFavorite();
   const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
+  const [detailVisible, setDetailVisible] = useState(false);
 
   const toggleFav = (key: string) =>
     setFavorite({ plantKey: key, favorite: !favorites.has(key) });
@@ -39,434 +116,356 @@ const PlantWikiScreen = () => {
     return matchesSearch && matchesCategory;
   });
 
+  const browsing = !search && activeCategory === "all";
+  const cardWidth = (width - SIDE_PADDING * 2 - COLUMN_GAP) / 2;
+
+  const openPlant = (plant: Plant) => {
+    setSelectedPlant(plant);
+    setDetailVisible(true);
+  };
+
   return (
-    <SafeAreaView
-      style={styles.container}
-      edges={["left", "right", "top", "bottom"]}
-    >
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.headerBtn}
-          onPress={() => router.back()}
-        >
-          <Ionicons name="chevron-back" size={22} color="#16a34a" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Plant Wiki</Text>
-        <Image
-          source={{ uri: user?.imageUrl }}
-          style={styles.headerAvatar}
-          contentFit="cover"
-        />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={[
-          styles.scroll,
-          { paddingBottom: insets.bottom + 24 },
-        ]}
-        showsVerticalScrollIndicator={false}
+    <>
+      <SkyScreen
+        heroHeight={252}
+        skyScale={0.66}
+        sheetStyle={styles.sheet}
+        hero={
+          <View style={styles.hero}>
+            <View style={styles.titleRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                hitSlop={8}
+                onPress={() => router.back()}
+                style={styles.back}
+              >
+                <MaterialIcons
+                  name="arrow-back"
+                  size={20}
+                  color={BRAND_SKY.mist}
+                />
+              </Pressable>
+              <Text accessibilityRole="header" style={styles.title}>
+                Plant Wiki
+              </Text>
+            </View>
+            <View style={styles.search}>
+              <MaterialIcons name="search" size={20} color={COLORS.primary} />
+              <TextInput
+                accessibilityLabel="Search for a plant species"
+                style={styles.searchInput}
+                placeholder="Search for a plant species..."
+                placeholderTextColor={COLORS.placeholder}
+                value={search}
+                onChangeText={setSearch}
+                returnKeyType="search"
+              />
+            </View>
+          </View>
+        }
       >
-        {/* ── Search ── */}
-        <View style={styles.searchWrap}>
-          <Ionicons
-            name="search"
-            size={18}
-            color="#006944"
-            style={styles.searchIcon}
-          />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search for a plant species..."
-            placeholderTextColor="#aaaeac"
-            value={search}
-            onChangeText={setSearch}
-          />
-        </View>
-
-        {/* ── Category Chips ── */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
           style={styles.chipsScroll}
+          contentContainerStyle={styles.chips}
         >
-          {CATEGORIES.map((c) => (
-            <TouchableOpacity
-              key={c.key}
-              style={[
-                styles.chip,
-                activeCategory === c.key && styles.chipActive,
-              ]}
-              onPress={() => setActiveCategory(c.key)}
-            >
-              <Text
-                style={[
-                  styles.chipText,
-                  activeCategory === c.key && styles.chipTextActive,
-                ]}
+          {CATEGORIES.map((c) => {
+            const selected = activeCategory === c.key;
+            return (
+              <Pressable
+                key={c.key}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                onPress={() => setActiveCategory(c.key)}
+                style={[styles.chip, selected && styles.chipSelected]}
               >
-                {c.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[styles.chipText, selected && styles.chipTextSelected]}
+                >
+                  {c.label}
+                </Text>
+              </Pressable>
+            );
+          })}
         </ScrollView>
 
-        {/* ── Plant of the Week ── */}
-        <Text style={styles.sectionLabel}>Plant of the Week</Text>
-        <View style={styles.featured}>
-          <Image
-            source={{
-              uri: "https://plus.unsplash.com/premium_photo-1673969608395-9281e5e4395f?q=80&w=1008&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
-            }}
-            style={styles.featuredImage}
-            contentFit="cover"
-          />
-          <View style={styles.featuredOverlay} />
-          <View style={styles.featuredContent}>
-            <View style={styles.featuredBadge}>
-              <Ionicons name="star" size={11} color="#16a34a" />
-              <Text style={styles.featuredBadgeText}>Top Purifier</Text>
-            </View>
-            <Text style={styles.featuredName}>Snake Plant</Text>
-            <Text style={styles.featuredDesc}>
-              A resilient beauty that works overtime while you sleep, converting
-              CO₂ into oxygen at night.
-            </Text>
-            <View style={styles.featuredStats}>
-              <View style={styles.featuredStat}>
-                <Ionicons name="moon" size={18} color="#006093" />
-                <Text style={styles.featuredStatLabel}>Removes CO₂</Text>
-                <Text style={styles.featuredStatSub}>Night-time</Text>
-              </View>
-              <View style={styles.featuredStatDivider} />
-              <View style={styles.featuredStat}>
-                <Ionicons name="water" size={18} color="#006944" />
-                <Text style={styles.featuredStatLabel}>Low Water</Text>
-                <Text style={styles.featuredStatSub}>Easy care</Text>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* ── Plant Library ── */}
-        <View style={styles.libraryHeader}>
-          <View>
-            <Text style={styles.sectionLabel}>Discover</Text>
-            <Text style={styles.libraryTitle}>Plant Library</Text>
-          </View>
-          <TouchableOpacity>
-            <Text style={styles.viewAll}>View All</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.grid}>
-          {filtered.map((plant) => (
-            <TouchableOpacity
-              key={plant.key}
-              style={styles.plantCard}
-              activeOpacity={0.88}
-              onPress={() => setSelectedPlant(plant)} // ← add this
+        {browsing && FEATURED ? (
+          <Section title="Plant of the week">
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Plant of the week: Snake Plant"
+              onPress={() => openPlant(FEATURED)}
+              style={({ pressed }) => [
+                styles.featured,
+                pressed && styles.pressed,
+              ]}
             >
-              <View style={styles.plantImageWrap}>
-                <Image
-                  source={{ uri: plant.image }}
-                  style={styles.plantImage}
-                  contentFit="cover"
-                />
-                <View style={styles.plantBadgeWrap}>
-                  <MaterialCommunityIcons
-                    name={plant.badgeIcon}
-                    size={11}
-                    color={plant.badgeIconColor}
+              <Image
+                source={plantImage(FEATURED.image)}
+                style={StyleSheet.absoluteFill}
+                contentFit="cover"
+                transition={200}
+              />
+              <LinearGradient
+                colors={["rgba(0,20,13,0.1)", "rgba(0,20,13,0.82)"]}
+                locations={[0.1, 0.75]}
+                style={StyleSheet.absoluteFill}
+              />
+              <View style={styles.featuredBody}>
+                <View style={styles.featuredBadge}>
+                  <MaterialIcons
+                    name="star"
+                    size={12}
+                    color={BRAND_SKY.mist}
                   />
-                  <Text style={styles.plantBadgeText}>{plant.badge}</Text>
+                  <Text style={styles.featuredBadgeText}>Top Purifier</Text>
                 </View>
-              </View>
-              <View style={styles.plantBody}>
-                <View style={styles.plantTitleRow}>
-                  <Text style={styles.plantName}>{plant.name}</Text>
-                  <Pressable onPress={() => toggleFav(plant.key)}>
-                    <Ionicons
-                      name={
-                        favorites.has(plant.key) ? "heart" : "heart-outline"
-                      }
-                      size={20}
-                      color={favorites.has(plant.key) ? "#ef4444" : "#aaaeac"}
-                    />
-                  </Pressable>
-                </View>
-                <Text style={styles.plantDesc} numberOfLines={2}>
-                  {plant.desc}
+                <Text style={styles.featuredName}>Snake Plant</Text>
+                <Text style={styles.featuredDescription}>
+                  A resilient beauty that works overtime while you sleep,
+                  converting CO₂ into oxygen at night.
                 </Text>
-                <View style={styles.plantTags}>
-                  <View style={styles.plantTag}>
-                    <MaterialCommunityIcons
-                      name="brain"
-                      size={11}
-                      color="#006944"
-                    />
-                    <Text style={styles.plantTagText}>{plant.level}</Text>
-                  </View>
-                  <View style={styles.plantTag}>
-                    <MaterialCommunityIcons
-                      name="flower"
-                      size={11}
-                      color="#006093"
-                    />
-                    <Text style={styles.plantTagText}>{plant.filters[0]}</Text>
-                  </View>
+                <View style={styles.featuredStats}>
+                  {(
+                    [
+                      ["moon-waning-crescent", "Removes CO₂", "Night-time"],
+                      ["water-outline", "Low Water", "Easy care"],
+                    ] as const
+                  ).map(([icon, label, note]) => (
+                    <View key={label} style={styles.featuredStat}>
+                      <MaterialCommunityIcons
+                        name={icon}
+                        size={20}
+                        color={BRAND_SKY.mist}
+                      />
+                      <View>
+                        <Text style={styles.featuredStatLabel}>{label}</Text>
+                        <Text style={styles.featuredStatNote}>{note}</Text>
+                      </View>
+                    </View>
+                  ))}
                 </View>
               </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </ScrollView>
-      <PlantDetailModal
+            </Pressable>
+          </Section>
+        ) : null}
+
+        <Section
+          title="Plant library"
+          right={`${filtered.length} ${filtered.length === 1 ? "plant" : "plants"}`}
+        >
+          {filtered.length === 0 ? (
+            <Text style={styles.empty}>
+              No plants match that search. Try a different name or category.
+            </Text>
+          ) : (
+            <View style={styles.grid}>
+              {filtered.map((plant) => (
+                <PlantCard
+                  key={plant.key}
+                  plant={plant}
+                  width={cardWidth}
+                  favorite={favorites.has(plant.key)}
+                  onOpen={() => openPlant(plant)}
+                  onToggleFavorite={() => toggleFav(plant.key)}
+                />
+              ))}
+            </View>
+          )}
+        </Section>
+      </SkyScreen>
+
+      <PlantDetailSheet
         plant={selectedPlant}
-        visible={!!selectedPlant}
-        onClose={() => setSelectedPlant(null)}
+        visible={detailVisible}
         isFavorite={favorites.has(selectedPlant?.key ?? "")}
         onToggleFav={() => selectedPlant && toggleFav(selectedPlant.key)}
+        onClose={() => setDetailVisible(false)}
       />
-    </SafeAreaView>
+    </>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f3f7f5" },
-
-  // Header
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "#edf2f0",
-  },
-  headerBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#edf2f0",
+  hero: { gap: 16 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  back: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: withAlpha(BRAND_SKY.mist, 0.28),
   },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#16a34a",
-    letterSpacing: -0.3,
+  title: {
+    fontFamily: FONTS.display,
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.6,
+    color: COLORS.onPrimary,
   },
-  headerAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#d7dedc",
-    borderWidth: 2,
-    borderColor: "#6decae",
-  },
-
-  scroll: { padding: 16, gap: 0 },
-
-  // Search
-  searchWrap: {
+  search: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ffffff",
-    borderRadius: 50,
+    gap: 10,
+    height: 52,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-    marginBottom: 16,
+    borderRadius: 16,
+    backgroundColor: COLORS.card,
   },
-  searchIcon: { marginRight: 10 },
   searchInput: {
     flex: 1,
-    fontSize: 14,
-    color: "#2b302f",
-  },
-
-  // Chips
-  chipsScroll: { marginHorizontal: -16, marginBottom: 24 },
-  chips: { paddingHorizontal: 16, gap: 8 },
-  chip: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 50,
-    backgroundColor: "#dee4e2",
-  },
-  chipActive: { backgroundColor: "#006944" },
-  chipText: { fontSize: 13, fontWeight: "600", color: "#585c5b" },
-  chipTextActive: { color: "#ffffff" },
-
-  // Section label
-  sectionLabel: {
-    fontSize: 10,
-    fontWeight: "700",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-    color: "#737876",
-    marginBottom: 8,
-    marginLeft: 2,
-  },
-
-  // Featured
-  featured: {
-    borderRadius: 20,
-    overflow: "hidden",
-    marginBottom: 28,
-    backgroundColor: "#064e3b",
-    height: 340,
-  },
-  featuredImage: {
-    ...StyleSheet.absoluteFill,
-    width: "100%",
     height: "100%",
+    paddingVertical: 0,
+    ...Platform.select<object>({ web: { outlineStyle: "none" } }),
+    fontFamily: FONTS.body,
+    fontSize: 15,
+    color: COLORS.onSurface,
   },
-  featuredOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(0,30,15,0.62)",
+
+  sheet: { paddingTop: 20, gap: 26 },
+  chipsScroll: { marginHorizontal: -SIDE_PADDING, flexGrow: 0 },
+  chips: { paddingHorizontal: SIDE_PADDING, gap: 8 },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: COLORS.surfaceLow,
   },
-  featuredContent: {
-    flex: 1,
+  chipSelected: { backgroundColor: COLORS.primary },
+  chipText: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 13,
+    lineHeight: 20,
+    color: COLORS.onSurfaceMuted,
+  },
+  chipTextSelected: { color: COLORS.onPrimary },
+
+  featured: {
+    height: 330,
+    borderRadius: 24,
+    overflow: "hidden",
     justifyContent: "flex-end",
-    padding: 20,
+    backgroundColor: BRAND_SKY.base,
   },
+  featuredBody: { padding: 18, gap: 6 },
   featuredBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
     alignSelf: "flex-start",
-    backgroundColor: "#6bfe9c40",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 50,
-    marginBottom: 10,
+    gap: 4,
+    paddingLeft: 8,
+    paddingRight: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: withAlpha(BRAND_SKY.mist, 0.25),
   },
   featuredBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#6bfe9c",
-    textTransform: "uppercase",
-    letterSpacing: 1,
+    fontFamily: FONTS.semiBold,
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 0.3,
+    color: BRAND_SKY.mist,
   },
   featuredName: {
-    fontSize: 30,
-    fontWeight: "800",
-    color: "#ffffff",
+    fontFamily: FONTS.display,
+    fontSize: 28,
+    lineHeight: 34,
     letterSpacing: -0.5,
-    marginBottom: 6,
+    color: COLORS.onPrimary,
   },
-  featuredDesc: {
+  featuredDescription: {
+    fontFamily: FONTS.body,
     fontSize: 13,
-    color: "#a7f3d0",
     lineHeight: 20,
-    marginBottom: 16,
+    color: BRAND_SKY.mist,
   },
   featuredStats: {
     flexDirection: "row",
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 14,
-    padding: 14,
     gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.12)",
   },
-  featuredStat: { flex: 1, gap: 4 },
-  featuredStatDivider: {
-    width: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255,255,255,0.2)",
-  },
+  featuredStat: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8 },
   featuredStatLabel: {
+    fontFamily: FONTS.semiBold,
     fontSize: 13,
-    fontWeight: "700",
-    color: "#ffffff",
-    marginTop: 4,
+    lineHeight: 18,
+    color: COLORS.onPrimary,
   },
-  featuredStatSub: { fontSize: 11, color: "#a7f3d0" },
+  featuredStatNote: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    lineHeight: 16,
+    color: BRAND_SKY.mist,
+  },
 
-  // Library
-  libraryHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-    marginBottom: 14,
-  },
-  libraryTitle: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#2b302f",
-    letterSpacing: -0.3,
-  },
-  viewAll: { fontSize: 13, fontWeight: "700", color: "#006944" },
-
-  // Grid
-  grid: { gap: 16 },
-  plantCard: {
-    backgroundColor: "#ffffff",
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: COLUMN_GAP },
+  card: {
     borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.card,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
   },
-  plantImageWrap: { height: 200, position: "relative" },
-  plantImage: { width: "100%", height: "100%" },
-  plantBadgeWrap: {
+  pressed: { transform: [{ scale: 0.98 }] },
+  cardImage: { height: 128, backgroundColor: COLORS.primarySoft },
+  cardBadge: {
     position: "absolute",
-    top: 12,
-    left: 12,
-    flexDirection: "row",
+    top: 10,
+    left: 10,
+    maxWidth: 104,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.94)",
+  },
+  cardBadgeText: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 11,
+    lineHeight: 14,
+    color: COLORS.onSurface,
+  },
+  heart: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: "center",
-    gap: 4,
-    backgroundColor: "rgba(255,255,255,0.92)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 50,
+    justifyContent: "center",
+    backgroundColor: COLORS.card,
   },
-  plantBadgeText: {
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    color: "#2b302f",
+  cardBody: {
+    gap: 2,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 12,
   },
-  plantBody: { padding: 16 },
-  plantTitleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
+  cardName: {
+    fontFamily: FONTS.semiBold,
+    fontSize: 15,
+    lineHeight: 20,
+    color: COLORS.onSurface,
   },
-  plantName: { fontSize: 18, fontWeight: "700", color: "#2b302f" },
-  plantDesc: {
-    fontSize: 13,
-    color: "#585c5b",
-    lineHeight: 19,
-    marginBottom: 12,
+  cardLevel: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    lineHeight: 16,
+    color: COLORS.onSurfaceMuted,
   },
-  plantTags: { flexDirection: "row", gap: 8 },
-  plantTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#edf2f0",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 50,
-  },
-  plantTagText: {
-    fontSize: 10,
-    fontWeight: "700",
-    textTransform: "uppercase",
-    color: "#585c5b",
+  empty: {
+    paddingVertical: 24,
+    textAlign: "center",
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.onSurfaceMuted,
   },
 });
 
